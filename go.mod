@@ -4,6 +4,7 @@ go 1.24.0
 
 require (
 	github.com/99designs/gqlgen v0.17.78
+	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/brianvoe/gofakeit/v6 v6.28.0
 	github.com/coreos/go-oidc/v3 v3.15.0
 	github.com/creack/pty/v2 v2.0.1

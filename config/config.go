@@ -141,6 +141,13 @@ type Config struct {
 		AllowedURLs []string `public:"true" info:"If set, allows webhooks for these domains only."`
 	}
 
+	WebPush struct {
+		Enable          bool   `public:"true" info:"Enable Web Push notifications."`
+		VAPIDPublicKey  string `info:"Base64 encoded VAPID public key."`
+		VAPIDPrivateKey string `password:"true" info:"Base64 encoded VAPID private key."`
+		TTL             int    `public:"true" info:"Time to live in seconds for push messages."`
+	}
+
 	Feedback struct {
 		Enable      bool   `public:"true" info:"Enables Feedback link in nav bar."`
 		OverrideURL string `public:"true" info:"Use a custom URL for Feedback link in nav bar."`
@@ -559,6 +566,10 @@ func (cfg Config) Validate() error {
 		validateEnable("SMTP", cfg.SMTP.Enable,
 			"From", cfg.SMTP.From,
 			"Address", cfg.SMTP.Address,
+		),
+		validateEnable("WebPush", cfg.WebPush.Enable,
+			"VAPIDPublicKey", cfg.WebPush.VAPIDPublicKey,
+			"VAPIDPrivateKey", cfg.WebPush.VAPIDPrivateKey,
 		),
 	)
 
