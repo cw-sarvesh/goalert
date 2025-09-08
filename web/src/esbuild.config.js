@@ -44,6 +44,7 @@ async function run() {
       explore: 'web/src/explore/explore.tsx',
       app: 'web/src/app/index.tsx',
       worker: 'web/src/app/worker/worker.ts',
+      'service-worker': 'web/src/app/service-worker.ts',
     },
     outdir: 'web/src/build/static/',
     logLevel: 'info',
