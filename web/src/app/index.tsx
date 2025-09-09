@@ -80,3 +80,15 @@ root.render(
     </StyledEngineProvider>
   </StrictMode>,
 )
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register(`${pathPrefix}/static/service-worker.js`, {
+        scope: `${pathPrefix}/`,
+      })
+      .catch((err) => {
+        warn('Service worker registration failed', err)
+      })
+  })
+}

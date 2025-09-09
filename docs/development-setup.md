@@ -26,6 +26,13 @@ Once the server is up, you can access the GoAlert UI at [http://localhost:3030](
 
 In development mode, you'll see a `Dev` item in the navigation bar. This allows you to configure and access additional integrations such as Prometheus and email messages.
 
+If you prefer to run the server directly without using `make start`, be sure to build the UI assets first:
+
+```bash
+npm run esbuild
+go run ./cmd/goalert
+```
+
 ## VSCode Configuration
 
 If you are using Visual Studio Code (VSCode), you can run:

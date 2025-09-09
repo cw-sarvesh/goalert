@@ -2,6 +2,7 @@
 /* eslint @typescript-eslint/no-var-requires: 0 */
 /* eslint @typescript-eslint/no-require-imports: 0 */
 const path = require('path')
+const fs = require('fs')
 
 const isProdBuild =
   process.argv.includes('--prod') || !process.argv.includes('--watch')
@@ -43,6 +44,7 @@ async function run() {
       explore: 'web/src/explore/explore.tsx',
       app: 'web/src/app/index.tsx',
       worker: 'web/src/app/worker/worker.ts',
+      'service-worker': 'web/src/app/service-worker.ts',
     },
     outdir: 'web/src/build/static/',
     logLevel: 'info',
@@ -67,8 +69,14 @@ async function run() {
     },
   })
 
+  await copyPublic()
+
   if (process.argv.includes('--watch')) {
-    await ctx.watch()
+    await ctx.watch({
+      onRebuild(error) {
+        if (!error) copyPublic().catch((err) => console.error(err))
+      },
+    })
   }
 }
 
@@ -76,3 +84,19 @@ run().catch((err) => {
   console.error(err)
   process.exit(1)
 })
+
+async function copyPublic() {
+  const staticDir = path.join('web', 'src', 'build', 'static')
+  const publicDir = path.join('web', 'src', 'app', 'public')
+
+  await fs.promises.mkdir(staticDir, { recursive: true })
+  await fs.promises.cp(
+    path.join(publicDir, 'manifest.json'),
+    path.join(staticDir, 'manifest.json')
+  )
+  await fs.promises.cp(
+    path.join(publicDir, 'icons'),
+    path.join(staticDir, 'icons'),
+    { recursive: true }
+  )
+}
