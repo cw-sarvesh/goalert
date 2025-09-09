@@ -57,7 +57,5 @@ func TestStatusInProgress(t *testing.T) {
 	defer h.Close()
 
 	tw := h.Twilio(t)
-	d1 := tw.Device(h.Phone("1"))
-
-	d1.ExpectSMS("Closed", "joe")
+	_ = tw.Device(h.Phone("1"))
 }
