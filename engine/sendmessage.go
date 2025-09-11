@@ -11,9 +11,35 @@ import (
 	"github.com/target/goalert/engine/message"
 	"github.com/target/goalert/gadb"
 	"github.com/target/goalert/notification"
+	"github.com/target/goalert/notification/twilio"
 	"github.com/target/goalert/permission"
+	"github.com/target/goalert/user/contactmethod"
 	"github.com/target/goalert/util/log"
 )
+
+type contactMethodFinder interface {
+	FindAll(ctx context.Context, dbtx gadb.DBTX, userID string) ([]contactmethod.ContactMethod, error)
+}
+
+func applyHighPriorityOverride(ctx context.Context, db gadb.DBTX, store contactMethodFinder, msg *message.Message, meta map[string]string, key, val string) {
+	if key == "" || val == "" {
+		return
+	}
+	if meta[key] != val {
+		return
+	}
+	cms, err := store.FindAll(ctx, db, msg.UserID)
+	if err != nil {
+		return
+	}
+	for _, cm := range cms {
+		if cm.Dest.Type == twilio.DestTypeTwilioVoice {
+			msg.Dest = cm.Dest
+			msg.DestID = notification.DestID{CMID: uuid.NullUUID{UUID: cm.ID, Valid: true}}
+			return
+		}
+	}
+}
 
 func (p *Engine) sendMessage(ctx context.Context, msg *message.Message) (*notification.SendResult, error) {
 	ctx = log.WithField(ctx, "CallbackID", msg.ID)
@@ -64,6 +90,11 @@ func (p *Engine) sendMessage(ctx context.Context, msg *message.Message) (*notifi
 		if err != nil {
 			return nil, errors.Wrap(err, "lookup alert")
 		}
+		meta, err := p.a.Metadata(ctx, p.b.db, msg.AlertID)
+		if err != nil {
+			return nil, errors.Wrap(err, "lookup alert metadata")
+		}
+		applyHighPriorityOverride(ctx, p.b.db, p.cfg.ContactMethodStore, msg, meta, p.cfg.ConfigSource.Config().Alerts.HighPriorityLabelKey, p.cfg.ConfigSource.Config().Alerts.HighPriorityLabelValue)
 		stat, err := p.cfg.NotificationStore.OriginalMessageStatus(ctx, msg.AlertID, msg.DestID)
 		if err != nil {
 			return nil, fmt.Errorf("lookup original message: %w", err)
@@ -71,10 +102,6 @@ func (p *Engine) sendMessage(ctx context.Context, msg *message.Message) (*notifi
 		if stat != nil && stat.ID == msg.ID {
 			// set to nil if it's the current message
 			stat = nil
-		}
-		meta, err := p.a.Metadata(ctx, p.b.db, msg.AlertID)
-		if err != nil {
-			return nil, errors.Wrap(err, "lookup alert metadata")
 		}
 		notifMsg = notification.Alert{
 			Base:        msg.Base(),

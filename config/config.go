@@ -38,6 +38,11 @@ type Config struct {
 		RequiredLabels []string `public:"true" info:"List of label names to require new services to define."`
 	}
 
+	Alerts struct {
+		HighPriorityLabelKey   string `public:"true" info:"Label key used to mark high priority alerts."`
+		HighPriorityLabelValue string `public:"true" info:"Label value indicating high priority alerts."`
+	}
+
 	Maintenance struct {
 		AlertCleanupDays     int  `public:"true" info:"Closed alerts will be deleted after this many days (0 means disable cleanup)."`
 		AlertAutoCloseDays   int  `public:"true" info:"Unacknowledged alerts will automatically be closed after this many days of inactivity. (0 means disable auto-close)."`
@@ -486,6 +491,13 @@ func (cfg Config) Validate() error {
 		validatePath("OIDC.UserInfoNamePath", cfg.OIDC.UserInfoNamePath),
 		validateKey("Slack.SigningSecret", cfg.Slack.SigningSecret),
 	)
+
+	if cfg.Alerts.HighPriorityLabelKey != "" {
+		err = validate.Many(err, validate.LabelKey("Alerts.HighPriorityLabelKey", cfg.Alerts.HighPriorityLabelKey))
+	}
+	if cfg.Alerts.HighPriorityLabelValue != "" {
+		err = validate.Many(err, validate.LabelValue("Alerts.HighPriorityLabelValue", cfg.Alerts.HighPriorityLabelValue))
+	}
 
 	if cfg.General.GoogleAnalyticsID != "" {
 		err = validate.Many(err, validate.MeasurementID("General.GoogleAnalyticsID", cfg.General.GoogleAnalyticsID))
