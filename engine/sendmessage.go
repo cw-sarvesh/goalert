@@ -12,6 +12,7 @@ import (
 	"github.com/target/goalert/gadb"
 	"github.com/target/goalert/notification"
 	"github.com/target/goalert/notification/twilio"
+	"github.com/target/goalert/notification/slack"
 	"github.com/target/goalert/permission"
 	"github.com/target/goalert/user/contactmethod"
 	"github.com/target/goalert/util/log"
@@ -22,23 +23,48 @@ type contactMethodFinder interface {
 }
 
 func applyHighPriorityOverride(ctx context.Context, db gadb.DBTX, store contactMethodFinder, msg *message.Message, meta map[string]string, key, val string) {
-	if key == "" || val == "" {
-		return
-	}
-	if meta[key] != val {
-		return
-	}
-	cms, err := store.FindAll(ctx, db, msg.UserID)
-	if err != nil {
-		return
-	}
-	for _, cm := range cms {
-		if cm.Dest.Type == twilio.DestTypeTwilioVoice {
-			msg.Dest = cm.Dest
-			msg.DestID = notification.DestID{CMID: uuid.NullUUID{UUID: cm.ID, Valid: true}}
-			return
-		}
-	}
+    if key == "" || val == "" {
+        return
+    }
+
+    cms, err := store.FindAll(ctx, db, msg.UserID)
+    if err != nil {
+        return
+    }
+
+    // If high-priority label matches, do not override -- allow normal routing
+    // (so it can notify all configured methods per rules/policy).
+    if meta[key] == val {
+        return
+    }
+
+    // Not high-priority: if current destination is voice, switch to a non-voice method.
+    // Preference order: Slack DM -> any other non-voice CM.
+    if msg.Dest.Type == twilio.DestTypeTwilioVoice {
+        var slackDM *contactmethod.ContactMethod
+        var other *contactmethod.ContactMethod
+        for i := range cms {
+            cm := &cms[i]
+            if cm.Dest.Type == twilio.DestTypeTwilioVoice {
+                continue
+            }
+            if cm.Dest.Type == slack.DestTypeSlackDirectMessage && slackDM == nil {
+                slackDM = cm
+            }
+            if other == nil {
+                other = cm
+            }
+        }
+        chosen := slackDM
+        if chosen == nil {
+            chosen = other
+        }
+        if chosen != nil {
+            msg.Dest = chosen.Dest
+            msg.DestID = notification.DestID{CMID: uuid.NullUUID{UUID: chosen.ID, Valid: true}}
+            log.Logf(ctx, "Non-priority alert; demoting voice -> %s", msg.Dest.Type)
+        }
+    }
 }
 
 func (p *Engine) sendMessage(ctx context.Context, msg *message.Message) (*notification.SendResult, error) {

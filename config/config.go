@@ -491,13 +491,13 @@ func (cfg Config) Validate() error {
 		validatePath("OIDC.UserInfoNamePath", cfg.OIDC.UserInfoNamePath),
 		validateKey("Slack.SigningSecret", cfg.Slack.SigningSecret),
 	)
-
-	if cfg.Alerts.HighPriorityLabelKey != "" {
-		err = validate.Many(err, validate.LabelKey("Alerts.HighPriorityLabelKey", cfg.Alerts.HighPriorityLabelKey))
-	}
-	if cfg.Alerts.HighPriorityLabelValue != "" {
-		err = validate.Many(err, validate.LabelValue("Alerts.HighPriorityLabelValue", cfg.Alerts.HighPriorityLabelValue))
-	}
+	// Not checking validaty because of our custom setup
+	// if cfg.Alerts.HighPriorityLabelKey != "" {
+	// 	err = validate.Many(err, validate.LabelKey("Alerts.HighPriorityLabelKey", cfg.Alerts.HighPriorityLabelKey))
+	// }
+	// if cfg.Alerts.HighPriorityLabelValue != "" {
+	// 	err = validate.Many(err, validate.LabelValue("Alerts.HighPriorityLabelValue", cfg.Alerts.HighPriorityLabelValue))
+	// }
 
 	if cfg.General.GoogleAnalyticsID != "" {
 		err = validate.Many(err, validate.MeasurementID("General.GoogleAnalyticsID", cfg.General.GoogleAnalyticsID))

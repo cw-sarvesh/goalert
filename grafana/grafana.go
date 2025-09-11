@@ -193,49 +193,122 @@ func GrafanaToEventsAPI(aDB *alert.Store, intDB *integrationkey.Store) http.Hand
 			return
 		}
 
-		var alerts []alert.Alert
-		switch versionInfo.Version {
-		case "1":
-			alerts, err = alertsFromV1(ctx, serviceID, data)
-		case "":
-			alerts, err = alertsFromLegacy(ctx, r, serviceID, data)
-		default:
-			clientError(w, http.StatusBadRequest, errors.Errorf("grafana: unknown payload version: %s", versionInfo.Version))
-			return
-		}
+        // Build alerts and metadata depending on payload version.
+        type alertWithMeta struct {
+            A    alert.Alert
+            Meta map[string]string
+        }
 
-		if clientError(w, http.StatusBadRequest, err) {
-			log.Logf(ctx, "bad request from grafana: %v", err)
-			return
-		}
-		if len(alerts) == 0 {
-			// no data
-			return
-		}
-		if len(alerts) > 10 {
-			log.Log(ctx, fmt.Errorf("grafana: too many alerts (truncating to 10): %d", len(alerts)))
-			alerts = alerts[:10]
-		}
+        var list []alertWithMeta
 
-		var hasFailures bool
-		for _, a := range alerts {
-			err = retry.DoTemporaryError(func(int) error {
-				_, _, err = aDB.CreateOrUpdate(ctx, &a)
-				return err
-			},
-				retry.Log(ctx),
-				retry.Limit(10),
-				retry.FibBackoff(time.Second),
-			)
-			if err != nil {
-				log.Log(ctx, fmt.Errorf("grafana: create alert: %w", err))
-				hasFailures = true
-			}
-		}
+        switch versionInfo.Version {
+        case "1":
+            // Parse V1 payload to capture labels as metadata.
+            var g struct {
+                Alerts []struct {
+                    Status              string
+                    Labels, Annotations map[string]string
+                    ValueString         string
+                    Fingerprint         string
+                    GeneratorURL        string
+                    SlienceURL          string
+                    ImageURL            string
+                }
+            }
+            err = json.Unmarshal(data, &g)
+            if clientError(w, http.StatusBadRequest, err) {
+                log.Logf(ctx, "bad request from grafana: %v", err)
+                return
+            }
 
-		if hasFailures {
-			http.Error(w, "failed to create alerts", http.StatusInternalServerError)
-			return
-		}
+            for _, a := range g.Alerts {
+                var alertStatus alert.Status
+                switch a.Status {
+                case "firing":
+                    alertStatus = alert.StatusTriggered
+                case "resolved":
+                    alertStatus = alert.StatusClosed
+                default:
+                    clientError(w, http.StatusBadRequest, errors.Errorf("grafana: unknown status: %s", a.Status))
+                    return
+                }
+
+                var buf strings.Builder
+                err := detailsTmpl.Execute(&buf, a)
+                if clientError(w, http.StatusBadRequest, err) {
+                    log.Logf(ctx, "bad request from grafana: %v", err)
+                    return
+                }
+                summary := a.Annotations["summary"]
+                if summary == "" {
+                    summary = a.Labels["alertname"]
+                }
+
+                // Only include og_priority label in metadata for routing.
+                meta := map[string]string{}
+                if v := a.Labels["og_priority"]; v != "" {
+                    meta["og_priority"] = v
+                }
+
+                list = append(list, alertWithMeta{
+                    A: alert.Alert{
+                        Summary:   validate.SanitizeText(summary, alert.MaxSummaryLength),
+                        Details:   validate.SanitizeText(buf.String(), alert.MaxDetailsLength),
+                        Status:    alertStatus,
+                        ServiceID: serviceID,
+                        Source:    alert.SourceGrafana,
+                        Dedup:     alert.NewUserDedup(a.Fingerprint),
+                    },
+                    // Store only og_priority as alert metadata to enable routing.
+                    Meta: func() map[string]string { if len(meta)==0 { return nil }; return meta }(),
+                })
+            }
+
+        case "":
+            // Legacy payloads: no labels available — create without metadata.
+            alerts, err := alertsFromLegacy(ctx, r, serviceID, data)
+            if clientError(w, http.StatusBadRequest, err) {
+                log.Logf(ctx, "bad request from grafana: %v", err)
+                return
+            }
+            for _, a := range alerts {
+                list = append(list, alertWithMeta{A: a, Meta: nil})
+            }
+        default:
+            clientError(w, http.StatusBadRequest, errors.Errorf("grafana: unknown payload version: %s", versionInfo.Version))
+            return
+        }
+
+        if len(list) == 0 {
+            // no data
+            return
+        }
+        if len(list) > 10 {
+            log.Log(ctx, fmt.Errorf("grafana: too many alerts (truncating to 10): %d", len(list)))
+            list = list[:10]
+        }
+
+        var hasFailures bool
+        for _, item := range list {
+            a := item.A
+            meta := item.Meta
+            err = retry.DoTemporaryError(func(int) error {
+                _, _, err = aDB.CreateOrUpdateWithMeta(ctx, &a, meta)
+                return err
+            },
+                retry.Log(ctx),
+                retry.Limit(10),
+                retry.FibBackoff(time.Second),
+            )
+            if err != nil {
+                log.Log(ctx, fmt.Errorf("grafana: create alert: %w", err))
+                hasFailures = true
+            }
+        }
+
+        if hasFailures {
+            http.Error(w, "failed to create alerts", http.StatusInternalServerError)
+            return
+        }
 	}
 }

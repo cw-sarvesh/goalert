@@ -35,6 +35,8 @@ func MapConfigValues(cfg config.Config) []ConfigValue {
 		{ID: "General.DisableLabelCreation", Type: ConfigTypeBoolean, Description: "Disables the ability to create new labels for services.", Value: fmt.Sprintf("%t", cfg.General.DisableLabelCreation)},
 		{ID: "General.DisableCalendarSubscriptions", Type: ConfigTypeBoolean, Description: "If set, disables all active calendar subscriptions as well as the ability to create new calendar subscriptions.", Value: fmt.Sprintf("%t", cfg.General.DisableCalendarSubscriptions)},
 		{ID: "Services.RequiredLabels", Type: ConfigTypeStringList, Description: "List of label names to require new services to define.", Value: strings.Join(cfg.Services.RequiredLabels, "\n")},
+		{ID: "Alerts.HighPriorityLabelKey", Type: ConfigTypeString, Description: "Label key used to mark high priority alerts.", Value: cfg.Alerts.HighPriorityLabelKey},
+		{ID: "Alerts.HighPriorityLabelValue", Type: ConfigTypeString, Description: "Label value indicating high priority alerts.", Value: cfg.Alerts.HighPriorityLabelValue},
 		{ID: "Maintenance.AlertCleanupDays", Type: ConfigTypeInteger, Description: "Closed alerts will be deleted after this many days (0 means disable cleanup).", Value: fmt.Sprintf("%d", cfg.Maintenance.AlertCleanupDays)},
 		{ID: "Maintenance.AlertAutoCloseDays", Type: ConfigTypeInteger, Description: "Unacknowledged alerts will automatically be closed after this many days of inactivity. (0 means disable auto-close).", Value: fmt.Sprintf("%d", cfg.Maintenance.AlertAutoCloseDays)},
 		{ID: "Maintenance.AutoCloseAckedAlerts", Type: ConfigTypeBoolean, Description: "If set, alerts that are acknowledged will also be automatically closed after the configured number of days of inactivity.", Value: fmt.Sprintf("%t", cfg.Maintenance.AutoCloseAckedAlerts)},
@@ -107,6 +109,8 @@ func MapPublicConfigValues(cfg config.Config) []ConfigValue {
 		{ID: "General.DisableLabelCreation", Type: ConfigTypeBoolean, Description: "Disables the ability to create new labels for services.", Value: fmt.Sprintf("%t", cfg.General.DisableLabelCreation)},
 		{ID: "General.DisableCalendarSubscriptions", Type: ConfigTypeBoolean, Description: "If set, disables all active calendar subscriptions as well as the ability to create new calendar subscriptions.", Value: fmt.Sprintf("%t", cfg.General.DisableCalendarSubscriptions)},
 		{ID: "Services.RequiredLabels", Type: ConfigTypeStringList, Description: "List of label names to require new services to define.", Value: strings.Join(cfg.Services.RequiredLabels, "\n")},
+		{ID: "Alerts.HighPriorityLabelKey", Type: ConfigTypeString, Description: "Label key used to mark high priority alerts.", Value: cfg.Alerts.HighPriorityLabelKey},
+		{ID: "Alerts.HighPriorityLabelValue", Type: ConfigTypeString, Description: "Label value indicating high priority alerts.", Value: cfg.Alerts.HighPriorityLabelValue},
 		{ID: "Maintenance.AlertCleanupDays", Type: ConfigTypeInteger, Description: "Closed alerts will be deleted after this many days (0 means disable cleanup).", Value: fmt.Sprintf("%d", cfg.Maintenance.AlertCleanupDays)},
 		{ID: "Maintenance.AlertAutoCloseDays", Type: ConfigTypeInteger, Description: "Unacknowledged alerts will automatically be closed after this many days of inactivity. (0 means disable auto-close).", Value: fmt.Sprintf("%d", cfg.Maintenance.AlertAutoCloseDays)},
 		{ID: "Maintenance.AutoCloseAckedAlerts", Type: ConfigTypeBoolean, Description: "If set, alerts that are acknowledged will also be automatically closed after the configured number of days of inactivity.", Value: fmt.Sprintf("%t", cfg.Maintenance.AutoCloseAckedAlerts)},
@@ -195,6 +199,10 @@ func ApplyConfigValues(cfg config.Config, vals []ConfigValueInput) (config.Confi
 			cfg.General.DisableCalendarSubscriptions = val
 		case "Services.RequiredLabels":
 			cfg.Services.RequiredLabels = parseStringList(v.Value)
+		case "Alerts.HighPriorityLabelKey":
+			cfg.Alerts.HighPriorityLabelKey = v.Value
+		case "Alerts.HighPriorityLabelValue":
+			cfg.Alerts.HighPriorityLabelValue = v.Value
 		case "Maintenance.AlertCleanupDays":
 			val, err := parseInt(v.ID, v.Value)
 			if err != nil {
