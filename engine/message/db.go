@@ -577,7 +577,7 @@ func (db *DB) _SendMessages(ctx context.Context, send SendFunc, status StatusFun
 
 	// if twilio is disable, create an entry to notify the user
 	cfg := config.FromContext(ctx)
-	if !cfg.Twilio.Enable {
+	if !cfg.Twilio.Enable && !cfg.Gupshup.Enable {
 		rows, err := tx.StmtContext(ctx, db.failSMSVoice).QueryContext(execCtx)
 		if err != nil {
 			return errors.Wrap(err, "check for failed message")

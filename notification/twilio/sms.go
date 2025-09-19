@@ -16,6 +16,7 @@ import (
 	"github.com/target/goalert/config"
 	"github.com/target/goalert/gadb"
 	"github.com/target/goalert/notification"
+	"github.com/target/goalert/notification/gupshup"
 	"github.com/target/goalert/notification/nfydest"
 	"github.com/target/goalert/permission"
 	"github.com/target/goalert/retry"
@@ -44,6 +45,8 @@ type SMS struct {
 	r notification.Receiver
 
 	limit *replyLimiter
+
+	gupshup *gupshup.Client
 }
 
 var (
@@ -67,6 +70,16 @@ func NewSMS(ctx context.Context, db *sql.DB, c *Config) (*SMS, error) {
 		limit: newReplyLimiter(),
 	}
 
+	cfg := config.FromContext(ctx)
+	if cfg.Gupshup.Enable {
+		s.gupshup = gupshup.NewClient(gupshup.Config{
+			BaseURL:    cfg.Gupshup.BaseURL,
+			APIKey:     cfg.Gupshup.APIKey,
+			Source:     cfg.Gupshup.Source,
+			HTTPClient: c.Client,
+		})
+	}
+
 	return s, nil
 }
 
@@ -86,15 +99,33 @@ func (s *SMS) MessageStatus(ctx context.Context, externalID string) (*notificati
 // Send implements the notification.Sender interface.
 func (s *SMS) SendMessage(ctx context.Context, msg notification.Message) (*notification.SentMessage, error) {
 	cfg := config.FromContext(ctx)
-	if !cfg.Twilio.Enable {
-		return nil, errors.New("Twilio provider is disabled")
-	}
 	if msg.DestType() != DestTypeTwilioSMS {
 		return nil, errors.Errorf("unsupported destination type %s; expected SMS", msg.DestType())
 	}
 	destNumber := msg.DestArg(FieldPhoneNumber)
-	if destNumber == cfg.Twilio.FromNumber {
+	if cfg.Twilio.Enable && destNumber == cfg.Twilio.FromNumber {
 		return nil, errors.New("refusing to send outgoing SMS to FromNumber")
+	}
+
+	if cfg.Gupshup.Enable {
+		client := s.gupshup
+		if client == nil {
+			var httpClient *http.Client
+			if s.c != nil {
+				httpClient = s.c.Client
+			}
+			client = gupshup.NewClient(gupshup.Config{
+				BaseURL:    cfg.Gupshup.BaseURL,
+				APIKey:     cfg.Gupshup.APIKey,
+				Source:     cfg.Gupshup.Source,
+				HTTPClient: httpClient,
+			})
+		}
+
+		return s.sendViaGupshup(ctx, client, msg, destNumber)
+	}
+	if !cfg.Twilio.Enable {
+		return nil, errors.New("Twilio provider is disabled")
 	}
 
 	ctx = log.WithFields(ctx, log.Fields{
@@ -161,6 +192,62 @@ func (s *SMS) SendMessage(ctx context.Context, msg notification.Message) (*notif
 	s.limit.Reset(destNumber)
 
 	return resp.sentMessage(), nil
+}
+
+func (s *SMS) sendViaGupshup(ctx context.Context, client *gupshup.Client, msg notification.Message, destNumber string) (*notification.SentMessage, error) {
+	if client == nil {
+		return nil, errors.New("Gupshup SMS provider is not configured")
+	}
+
+	ctx = log.WithFields(ctx, log.Fields{
+		"Phone": destNumber,
+		"Type":  "GupshupSMS",
+	})
+
+	cfg := config.FromContext(ctx)
+
+	var (
+		message string
+		err     error
+	)
+
+	switch t := msg.(type) {
+	case notification.AlertStatus:
+		message, err = renderAlertStatusMessage(cfg.ApplicationName(), t)
+	case notification.AlertBundle:
+		var link string
+		if canContainURL(ctx, destNumber) {
+			link = cfg.CallbackURL(fmt.Sprintf("/services/%s/alerts", t.ServiceID))
+		}
+		message, err = renderAlertBundleMessage(cfg.ApplicationName(), t, link, 0)
+	case notification.Alert:
+		var link string
+		if canContainURL(ctx, destNumber) {
+			link = cfg.CallbackURL(fmt.Sprintf("/alerts/%d", t.AlertID))
+		}
+		message, err = renderAlertMessage(cfg.ApplicationName(), t, link, 0)
+	case notification.Test:
+		message = fmt.Sprintf("%s: Test message.", cfg.ApplicationName())
+	case notification.Verification:
+		message = fmt.Sprintf("%s: Verification code: %s", cfg.ApplicationName(), t.Code)
+	default:
+		return nil, errors.Errorf("unhandled message type %T", t)
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, "render message")
+	}
+
+	externalID, err := client.SendSMS(ctx, destNumber, message)
+	if err != nil {
+		return nil, errors.Wrap(err, "send message")
+	}
+
+	s.limit.Reset(destNumber)
+
+	return &notification.SentMessage{
+		ExternalID: externalID,
+		State:      notification.StateSent,
+	}, nil
 }
 
 func (s *SMS) ServeStatusCallback(w http.ResponseWriter, req *http.Request) {
