@@ -38,6 +38,11 @@ type Config struct {
 		RequiredLabels []string `public:"true" info:"List of label names to require new services to define."`
 	}
 
+	Alerts struct {
+		HighPriorityLabelKey   string `public:"true" info:"Label key used to mark high priority alerts."`
+		HighPriorityLabelValue string `public:"true" info:"Label value indicating high priority alerts."`
+	}
+
 	Maintenance struct {
 		AlertCleanupDays     int  `public:"true" info:"Closed alerts will be deleted after this many days (0 means disable cleanup)."`
 		AlertAutoCloseDays   int  `public:"true" info:"Unacknowledged alerts will automatically be closed after this many days of inactivity. (0 means disable auto-close)."`
@@ -144,6 +149,14 @@ type Config struct {
 	Feedback struct {
 		Enable      bool   `public:"true" info:"Enables Feedback link in nav bar."`
 		OverrideURL string `public:"true" info:"Use a custom URL for Feedback link in nav bar."`
+	}
+
+	// WebPush contains configuration for browser push notifications (VAPID).
+	WebPush struct {
+		Enable          bool   `public:"true" info:"Enable Web Push notifications (requires VAPID keys)."`
+		VAPIDPublicKey  string `public:"true" info:"Public VAPID key (Base64 URL-safe, unpadded) exposed to clients."`
+		VAPIDPrivateKey string `password:"true" info:"Private VAPID key used for signing push messages (keep secret)."`
+		SubscriberEmail string `public:"true" info:"Email address used for the VAPID contact (sub) claim."`
 	}
 }
 
@@ -486,6 +499,13 @@ func (cfg Config) Validate() error {
 		validatePath("OIDC.UserInfoNamePath", cfg.OIDC.UserInfoNamePath),
 		validateKey("Slack.SigningSecret", cfg.Slack.SigningSecret),
 	)
+	// Not checking validaty because of our custom setup
+	// if cfg.Alerts.HighPriorityLabelKey != "" {
+	// 	err = validate.Many(err, validate.LabelKey("Alerts.HighPriorityLabelKey", cfg.Alerts.HighPriorityLabelKey))
+	// }
+	// if cfg.Alerts.HighPriorityLabelValue != "" {
+	// 	err = validate.Many(err, validate.LabelValue("Alerts.HighPriorityLabelValue", cfg.Alerts.HighPriorityLabelValue))
+	// }
 
 	if cfg.General.GoogleAnalyticsID != "" {
 		err = validate.Many(err, validate.MeasurementID("General.GoogleAnalyticsID", cfg.General.GoogleAnalyticsID))
@@ -523,6 +543,9 @@ func (cfg Config) Validate() error {
 	if cfg.SMTP.From != "" {
 		err = validate.Many(err, validate.Email("SMTP.From", cfg.SMTP.From))
 	}
+	if cfg.WebPush.SubscriberEmail != "" {
+		err = validate.Many(err, validate.Email("WebPush.SubscriberEmail", cfg.WebPush.SubscriberEmail))
+	}
 	if cfg.Slack.InteractiveMessages && cfg.Slack.SigningSecret == "" {
 		err = validate.Many(err, validation.NewFieldError("Slack.SigningSecret", "required to enable Slack interactive messages"))
 	}
@@ -559,6 +582,12 @@ func (cfg Config) Validate() error {
 		validateEnable("SMTP", cfg.SMTP.Enable,
 			"From", cfg.SMTP.From,
 			"Address", cfg.SMTP.Address,
+		),
+
+		// If WebPush is enabled, require both VAPID keys.
+		validateEnable("WebPush", cfg.WebPush.Enable,
+			"VAPIDPublicKey", cfg.WebPush.VAPIDPublicKey,
+			"VAPIDPrivateKey", cfg.WebPush.VAPIDPrivateKey,
 		),
 	)
 

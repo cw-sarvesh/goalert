@@ -10,6 +10,7 @@ import { PageActionContainer, PageActionProvider } from '../util/PageActions'
 import SwipeableDrawer from '@mui/material/SwipeableDrawer'
 import LazyWideSideBar, { drawerWidth } from './WideSideBar'
 import LazyNewUserSetup from './components/NewUserSetup'
+import NotificationPermissionPrompt from './components/NotificationPermissionPrompt'
 import { SkipToContentLink } from '../util/SkipToContentLink'
 import { SearchContainer, SearchProvider } from '../util/AppBarSearchContainer'
 import makeStyles from '@mui/styles/makeStyles'
@@ -127,6 +128,7 @@ export default function App(): React.JSX.Element {
             >
               <ErrorBoundary>
                 <Suspense fallback={<Spinner />}>
+                  <NotificationPermissionPrompt />
                   <LazyNewUserSetup />
                   <AuthLink />
                   <Grid

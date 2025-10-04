@@ -119,4 +119,11 @@ func TestConfig_Validate(t *testing.T) {
 		cfg.Twilio.VoiceLanguage = "\x00" // non-ASCII value
 		assert.Error(t, cfg.Validate(), "language must be a valid string")
 	})
+
+	t.Run("HighPriorityLabel", func(t *testing.T) {
+		var cfg Config
+		cfg.Alerts.HighPriorityLabelKey = "alerts/priority"
+		cfg.Alerts.HighPriorityLabelValue = "high"
+		assert.NoError(t, cfg.Validate())
+	})
 }
