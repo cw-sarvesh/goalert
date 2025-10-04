@@ -9,6 +9,7 @@ import AdminLimits from '../admin/AdminLimits'
 import AdminToolbox from '../admin/AdminToolbox'
 import AdminSwitchover from '../admin/switchover/AdminSwitchover'
 import AdminAPIKeys from '../admin/AdminAPIKeys'
+import AdminMetaAnalytics from '../admin/admin-meta-analytics/AdminMetaAnalytics'
 import AlertsList from '../alerts/AlertsList'
 import AlertDetailPage from '../alerts/pages/AlertDetailPage'
 import Documentation from '../documentation/Documentation'
@@ -122,6 +123,7 @@ export const routes: Record<string, JSXElementConstructor<any>> = {
   '/admin/limits': AdminLimits,
   '/admin/toolbox': AdminToolbox,
   '/admin/message-logs': AdminMessageLogsLayout,
+  '/admin/analytics': AdminMetaAnalytics,
   '/admin/alert-counts': AdminAlertCounts,
   '/admin/service-metrics': AdminServiceMetrics,
   '/admin/switchover': AdminSwitchover,

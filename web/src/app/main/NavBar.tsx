@@ -101,6 +101,7 @@ export default function NavBar(): React.JSX.Element {
               <NavBarSubLink to='/admin/limits' title='System Limits' />
               <NavBarSubLink to='/admin/toolbox' title='Toolbox' />
               <NavBarSubLink to='/admin/message-logs' title='Message Logs' />
+              <NavBarSubLink to='/admin/analytics' title='Analytics' />
               <NavBarSubLink to='/admin/alert-counts' title='Alert Counts' />
               <NavBarSubLink
                 to='/admin/service-metrics'

@@ -15,6 +15,7 @@ import (
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/target/goalert/alert"
 	"github.com/target/goalert/config"
 	"github.com/target/goalert/expflag"
 	"github.com/target/goalert/genericapi"
@@ -236,6 +237,54 @@ func (app *App) initHTTP(ctx context.Context) error {
 
 	mux.HandleFunc("GET /api/v2/config", app.ConfigStore.ServeConfig)
 	mux.HandleFunc("PUT /api/v2/config", app.ConfigStore.ServeConfig)
+
+	mux.HandleFunc("GET /admin/analytics/service-meta", func(w http.ResponseWriter, req *http.Request) {
+		if err := permission.LimitCheckAny(req.Context(), permission.Admin); err != nil {
+			if !errutil.HTTPError(req.Context(), w, err) {
+				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+			}
+			return
+		}
+
+		q := req.URL.Query()
+		serviceID := strings.TrimSpace(q.Get("serviceID"))
+		metaKey := strings.TrimSpace(q.Get("metaKey"))
+		startStr := strings.TrimSpace(q.Get("start"))
+		endStr := strings.TrimSpace(q.Get("end"))
+
+		if serviceID == "" || metaKey == "" || startStr == "" || endStr == "" {
+			http.Error(w, "serviceID, metaKey, start, and end are required", http.StatusBadRequest)
+			return
+		}
+
+		start, err := time.Parse(time.RFC3339, startStr)
+		if err != nil {
+			http.Error(w, "invalid start timestamp; expected RFC3339", http.StatusBadRequest)
+			return
+		}
+		end, err := time.Parse(time.RFC3339, endStr)
+		if err != nil {
+			http.Error(w, "invalid end timestamp; expected RFC3339", http.StatusBadRequest)
+			return
+		}
+
+		stats, err := app.AlertStore.MetaKeyAnalytics(req.Context(), serviceID, metaKey, start, end)
+		if err != nil {
+			if errutil.HTTPError(req.Context(), w, err) {
+				return
+			}
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if stats == nil {
+			stats = &alert.MetaAnalytics{}
+		}
+		if err := json.NewEncoder(w).Encode(stats); err != nil {
+			log.Logf(req.Context(), "admin analytics: encode response failed: %v", err)
+		}
+	})
 
 	// Accept Web Push subscription payloads (UI uses this endpoint).
 	mux.HandleFunc("POST /api/push/subscribe", func(w http.ResponseWriter, req *http.Request) {
