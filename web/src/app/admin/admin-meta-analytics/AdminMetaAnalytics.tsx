@@ -1,6 +1,7 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
+  Autocomplete,
   Button,
   Card,
   CardContent,
@@ -23,6 +24,7 @@ import {
 } from 'recharts'
 import AutoSizer from 'react-virtualized-auto-sizer'
 import { useTheme } from '@mui/material/styles'
+import { gql, useQuery } from 'urql'
 
 interface MetaPriorityCount {
   value: string
@@ -42,16 +44,42 @@ interface MetaAnalytics {
 const formatInput = (dt: DateTime): string =>
   dt.toISO({ suppressMilliseconds: true, includeOffset: false }) || ''
 
+const servicesQuery = gql`
+  query AdminMetaAnalyticsServices($search: String) {
+    services(input: { search: $search, omit: [], favoritesFirst: false }) {
+      nodes {
+        id
+        name
+      }
+    }
+  }
+`
+
+const PRIORITY_OPTIONS = ['All', 'P1', 'P2', 'P3']
+
 export default function AdminMetaAnalytics(): React.JSX.Element {
   const theme = useTheme()
   const now = useMemo(() => DateTime.now(), [])
   const [serviceID, setServiceID] = useState('')
-  const [metaKey, setMetaKey] = useState('alerts/priority')
+  const metaKey = 'alerts/priority'
+  const [priority, setPriority] = useState<string>('All')
   const [startValue, setStartValue] = useState(formatInput(now.minus({ days: 7 })))
   const [endValue, setEndValue] = useState(formatInput(now))
   const [analytics, setAnalytics] = useState<MetaAnalytics | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [serviceSearch, setServiceSearch] = useState('')
+
+  const [{ data: servicesData, fetching: servicesFetching }] = useQuery({
+    query: servicesQuery,
+    variables: { search: serviceSearch || undefined },
+  })
+
+  useEffect(() => {
+    if (!serviceID && servicesData?.services?.nodes?.length) {
+      setServiceID(servicesData.services.nodes[0].id)
+    }
+  }, [serviceID, servicesData])
 
   const handleFetch = useCallback(async () => {
     setError(null)
@@ -85,10 +113,14 @@ export default function AdminMetaAnalytics(): React.JSX.Element {
 
     const params = new URLSearchParams({
       serviceID: serviceID.trim(),
-      metaKey: metaKey.trim(),
+      metaKey,
       start: startDT.toUTC().toISO({ suppressMilliseconds: true }) || '',
       end: endDT.toUTC().toISO({ suppressMilliseconds: true }) || '',
     })
+
+    if (priority !== 'All') {
+      params.set('metaValue', priority)
+    }
 
     setLoading(true)
     try {
@@ -210,19 +242,36 @@ export default function AdminMetaAnalytics(): React.JSX.Element {
                 spacing={2}
                 alignItems={{ xs: 'stretch', md: 'flex-end' }}
               >
-                <TextField
-                  label='Service ID'
-                  value={serviceID}
-                  onChange={(e) => setServiceID(e.target.value)}
-                  required
+                <Autocomplete
+                  sx={{ minWidth: 240 }}
                   fullWidth
+                  loading={servicesFetching}
+                  options={servicesData?.services?.nodes ?? []}
+                  getOptionLabel={(option) => option.name}
+                  value={
+                    servicesData?.services?.nodes?.find((svc) => svc.id === serviceID) ??
+                    null
+                  }
+                  onInputChange={(_, value) => setServiceSearch(value)}
+                  onChange={(_, value) => {
+                    setServiceID(value?.id ?? '')
+                  }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label='Service'
+                      required
+                    />
+                  )}
                 />
-                <TextField
-                  label='Metadata Key'
-                  value={metaKey}
-                  onChange={(e) => setMetaKey(e.target.value)}
-                  required
-                  fullWidth
+                <Autocomplete
+                  sx={{ minWidth: 160 }}
+                  options={PRIORITY_OPTIONS}
+                  value={priority}
+                  onChange={(_, value) => setPriority(value ?? 'All')}
+                  renderInput={(params) => (
+                    <TextField {...params} label='Priority' />
+                  )}
                 />
                 <TextField
                   label='Start'

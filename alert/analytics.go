@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/target/goalert/permission"
+	"github.com/target/goalert/util/log"
 	"github.com/target/goalert/validation"
 	"github.com/target/goalert/validation/validate"
 )
@@ -43,6 +44,7 @@ WITH priority_alerts AS (
 SELECT meta_value, COUNT(*)
 FROM priority_alerts
 WHERE meta_value IS NOT NULL AND meta_value <> ''
+  AND ($5 = '' OR meta_value = $5)
 GROUP BY meta_value
 ORDER BY meta_value;
 `
@@ -60,6 +62,7 @@ WITH acked AS (
       AND l.timestamp < $3
       AND jsonb_extract_path_text(ad.metadata, 'alertMetaV1', $4) IS NOT NULL
       AND jsonb_extract_path_text(ad.metadata, 'alertMetaV1', $4) <> ''
+      AND ($5 = '' OR jsonb_extract_path_text(ad.metadata, 'alertMetaV1', $4) = $5)
 )
 SELECT escalation_level, COUNT(*)
 FROM acked
@@ -68,7 +71,7 @@ ORDER BY escalation_level;
 `
 
 // MetaKeyAnalytics returns aggregated statistics for alerts that have the provided metadata key.
-func (s *Store) MetaKeyAnalytics(ctx context.Context, serviceID, metaKey string, start, end time.Time) (*MetaAnalytics, error) {
+func (s *Store) MetaKeyAnalytics(ctx context.Context, serviceID, metaKey, metaValue string, start, end time.Time) (*MetaAnalytics, error) {
 	if err := permission.LimitCheckAny(ctx, permission.Admin); err != nil {
 		return nil, err
 	}
@@ -86,10 +89,10 @@ func (s *Store) MetaKeyAnalytics(ctx context.Context, serviceID, metaKey string,
 	}
 
 	svcID := uuid.MustParse(serviceID)
-
+	log.Logf(ctx, "MetaKeyAnalytics: serviceID=%s, metaKey=%s, start=%s, end=%s", svcID, metaKey, start, end)
 	res := &MetaAnalytics{}
 
-	rows, err := s.db.QueryContext(ctx, metaPrioritySQL, svcID, start, end, metaKey)
+	rows, err := s.db.QueryContext(ctx, metaPrioritySQL, svcID, start, end, metaKey, metaValue)
 	if err != nil {
 		return nil, errors.Wrap(err, "query metadata priorities")
 	}
@@ -112,7 +115,7 @@ func (s *Store) MetaKeyAnalytics(ctx context.Context, serviceID, metaKey string,
 		return nil, errors.Wrap(err, "iterate metadata priorities")
 	}
 
-	rows, err = s.db.QueryContext(ctx, metaAckSQL, svcID, start, end, metaKey)
+	rows, err = s.db.QueryContext(ctx, metaAckSQL, svcID, start, end, metaKey, metaValue)
 	if err != nil {
 		return nil, errors.Wrap(err, "query acknowledgement distribution")
 	}

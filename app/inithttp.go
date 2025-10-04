@@ -268,7 +268,7 @@ func (app *App) initHTTP(ctx context.Context) error {
 			return
 		}
 
-		stats, err := app.AlertStore.MetaKeyAnalytics(req.Context(), serviceID, metaKey, start, end)
+		stats, err := app.AlertStore.MetaKeyAnalytics(req.Context(), serviceID, metaKey, q.Get("metaValue"), start, end)
 		if err != nil {
 			if errutil.HTTPError(req.Context(), w, err) {
 				return
