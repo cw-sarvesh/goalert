@@ -156,53 +156,99 @@
       <script src="{{ .Prefix }}{{ .ExtraJS }}"></script>
     {{- end }}
     <script nonce="{{ .Nonce }}">
-      if ('serviceWorker' in navigator) {
+      (function () {
+        if (!('serviceWorker' in navigator)) return;
+
+        function toUint8Array(base64String) {
+          if (!base64String) return undefined;
+          var k = base64String.replace(/-/g, '+').replace(/_/g, '/');
+          var pad = '='.repeat((4 - (k.length % 4)) % 4);
+          var raw = atob(k + pad);
+          var out = new Uint8Array(raw.length);
+          for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+          return out;
+        }
+
         window.addEventListener('load', function () {
           navigator.serviceWorker
             .register('{{ .Prefix }}/service-worker.js')
             .then(function (reg) {
-              if ('PushManager' in window) {
-                function subscribe() {
-                  reg.pushManager
-                    .subscribe({
-                      userVisibleOnly: true,
-                      applicationServerKey: (function () {
-                        var k =
-                          window.vapidPublicKey ||
-                          window.VAPID_PUBLIC_KEY ||
-                          (document.querySelector('meta[name="vapid-public-key"]') || {})
-                            .content;
-                        if (!k) return undefined;
-                        // Convert URL-safe base64 to Uint8Array
-                        k = k.replace(/-/g, '+').replace(/_/g, '/');
-                        var pad = '='.repeat((4 - (k.length % 4)) % 4);
-                        var raw = atob(k + pad);
-                        var out = new Uint8Array(raw.length);
-                        for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
-                        return out;
-                      })(),
-                    })
+              if (!('PushManager' in window)) {
+                return;
+              }
+
+              function applicationServerKey() {
+                var k =
+                  window.vapidPublicKey ||
+                  window.VAPID_PUBLIC_KEY ||
+                  (document.querySelector('meta[name="vapid-public-key"]') || {})
+                    .content;
+                return toUint8Array(k);
+              }
+
+              function sendSubscription(sub) {
+                return fetch('{{ .Prefix }}/api/push/subscribe', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(sub),
+                });
+              }
+
+              function ensureSubscribed() {
+                return reg.pushManager.getSubscription().then(function (existing) {
+                  if (existing) {
+                    return sendSubscription(existing).then(function () {
+                      return existing;
+                    });
+                  }
+
+                  var key = applicationServerKey();
+                  if (!key) {
+                    return Promise.reject(new Error('Missing VAPID public key'));
+                  }
+
+                  return reg.pushManager
+                    .subscribe({ userVisibleOnly: true, applicationServerKey: key })
                     .then(function (sub) {
-                      fetch('{{ .Prefix }}/api/push/subscribe', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(sub),
+                      return sendSubscription(sub).then(function () {
+                        return sub;
                       });
                     });
+                });
+              }
+
+              window.goalertPush = window.goalertPush || {};
+              window.goalertPush.ensureSubscribed = ensureSubscribed;
+              window.goalertPush.requestPermissionAndSubscribe = function () {
+                if (!('Notification' in window)) {
+                  return Promise.reject(new Error('Notifications are not supported'));
                 }
                 if (Notification.permission === 'granted') {
-                  subscribe();
-                } else if (Notification.permission === 'default') {
-                  Notification.requestPermission().then(function (permission) {
-                    if (permission === 'granted') {
-                      subscribe();
-                    }
-                  });
+                  return ensureSubscribed();
                 }
+                return Notification.requestPermission().then(function (permission) {
+                  if (permission === 'granted') {
+                    return ensureSubscribed();
+                  }
+                  return Promise.reject(new Error('Notification permission was not granted'));
+                });
+              };
+              window.goalertPush.getPermission = function () {
+                if (!('Notification' in window)) return 'denied';
+                return Notification.permission;
+              };
+
+              if ('Notification' in window && Notification.permission === 'granted') {
+                ensureSubscribed();
+              }
+            })
+            .catch(function (err) {
+              if (window.console && console.warn) {
+                console.warn('service worker registration failed', err);
               }
             });
         });
-      }
+      })();
     </script>
   </body>
 </html>
