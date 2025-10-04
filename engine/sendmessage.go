@@ -12,7 +12,6 @@ import (
 	"github.com/target/goalert/gadb"
 	"github.com/target/goalert/notification"
 	"github.com/target/goalert/notification/twilio"
-	"github.com/target/goalert/notification/slack"
 	"github.com/target/goalert/permission"
 	"github.com/target/goalert/user/contactmethod"
 	"github.com/target/goalert/util/log"
@@ -22,76 +21,83 @@ type contactMethodFinder interface {
 	FindAll(ctx context.Context, dbtx gadb.DBTX, userID string) ([]contactmethod.ContactMethod, error)
 }
 
-func applyHighPriorityOverride(ctx context.Context, db gadb.DBTX, store contactMethodFinder, msg *message.Message, meta map[string]string, key, val string) {
-    if key == "" || val == "" {
-        return
-    }
+// applyHighPriorityOverride returns true when the current notification should be suppressed
+// (e.g., a non-priority alert targeting a voice contact method).
+func applyHighPriorityOverride(ctx context.Context, db gadb.DBTX, store contactMethodFinder, msg *message.Message, meta map[string]string, key, val string) bool {
+	if key == "" || val == "" {
+		return false
+	}
 
-    cms, err := store.FindAll(ctx, db, msg.UserID)
-    if err != nil {
-        return
-    }
+	isHigh := meta[key] == val
+	log.Logf(ctx, "high-priority override: evaluating meta[%q]=%q (required=%q)", key, meta[key], val)
+	if isHigh {
+		log.Logf(ctx, "high-priority override: alert tagged high priority; ensuring voice delivery")
+		// Already targeting voice, nothing to promote.
+		if msg.Dest.Type == twilio.DestTypeTwilioVoice {
+			log.Logf(ctx, "high-priority override: already targeting voice; no change")
+			return false
+		}
 
-    // If high-priority label matches, do not override -- allow normal routing
-    // (so it can notify all configured methods per rules/policy).
-    if meta[key] == val {
-        return
-    }
+		// Promote the notification to voice if the user has a voice contact method.
+		log.Logf(ctx, "high-priority override: scanning contact methods for voice destination")
+		cms, err := store.FindAll(ctx, db, msg.UserID)
+		if err != nil {
+			log.Log(ctx, errors.Wrap(err, "lookup contact methods for high priority alert"))
+			return false
+		}
+		for i := range cms {
+			cm := &cms[i]
+			if cm.Dest.Type != twilio.DestTypeTwilioVoice {
+				continue
+			}
+			msg.Dest = cm.Dest
+			msg.DestID = notification.DestID{CMID: uuid.NullUUID{UUID: cm.ID, Valid: true}}
+			log.Logf(ctx, "high-priority override: promoted to voice contact method %s", cm.ID)
+			return false
+		}
+		log.Logf(ctx, "high-priority override: no voice contact method found; keep existing destination")
+		return false
+	}
 
-    // Not high-priority: if current destination is voice, switch to a non-voice method.
-    // Preference order: Slack DM -> any other non-voice CM.
-    if msg.Dest.Type == twilio.DestTypeTwilioVoice {
-        var slackDM *contactmethod.ContactMethod
-        var other *contactmethod.ContactMethod
-        for i := range cms {
-            cm := &cms[i]
-            if cm.Dest.Type == twilio.DestTypeTwilioVoice {
-                continue
-            }
-            if cm.Dest.Type == slack.DestTypeSlackDirectMessage && slackDM == nil {
-                slackDM = cm
-            }
-            if other == nil {
-                other = cm
-            }
-        }
-        chosen := slackDM
-        if chosen == nil {
-            chosen = other
-        }
-        if chosen != nil {
-            msg.Dest = chosen.Dest
-            msg.DestID = notification.DestID{CMID: uuid.NullUUID{UUID: chosen.ID, Valid: true}}
-            log.Logf(ctx, "Non-priority alert; demoting voice -> %s", msg.Dest.Type)
-        }
-    }
+	// Not high priority: suppress voice notifications and allow subsequent rules to run.
+	if msg.Dest.Type == twilio.DestTypeTwilioVoice {
+		log.Logf(ctx, "high-priority override: alert not high priority; suppressing voice notification for user %s", msg.UserID)
+		return true
+	}
+
+	return false
 }
 
 func (p *Engine) sendMessage(ctx context.Context, msg *message.Message) (*notification.SendResult, error) {
 	ctx = log.WithField(ctx, "CallbackID", msg.ID)
+	log.Logf(ctx, "sendMessage: start processing message type=%s destType=%s", msg.Type, msg.Dest.Type)
 
 	if msg.DestID.IsUserCM() {
 		ctx = permission.UserSourceContext(ctx, msg.UserID, permission.RoleUser, &permission.SourceInfo{
 			Type: permission.SourceTypeContactMethod,
 			ID:   msg.DestID.String(),
 		})
+		log.Logf(ctx, "sendMessage: permission context set for contact method %s", msg.DestID.String())
 	} else {
 		ctx = permission.SystemContext(ctx, "SendMessage")
 		ctx = permission.SourceContext(ctx, &permission.SourceInfo{
 			Type: permission.SourceTypeNotificationChannel,
 			ID:   msg.DestID.String(),
 		})
+		log.Logf(ctx, "sendMessage: permission context set for notification channel %s", msg.DestID.String())
 	}
 
 	var notifMsg notification.Message
 	var isFirstAlertMessage bool
 	switch msg.Type {
 	case notification.MessageTypeAlertBundle:
+		log.Logf(ctx, "sendMessage: building alert bundle payload for service=%s", msg.ServiceID)
 		name, count, err := p.a.ServiceInfo(ctx, msg.ServiceID)
 		if err != nil {
 			return nil, errors.Wrap(err, "lookup service info")
 		}
 		if count == 0 {
+			log.Logf(ctx, "sendMessage: bundle resolved to zero alerts; skipping send")
 			// already acked/closed, don't send bundled notification
 			return &notification.SendResult{
 				ID: msg.ID,
@@ -108,6 +114,7 @@ func (p *Engine) sendMessage(ctx context.Context, msg *message.Message) (*notifi
 			Count:       count,
 		}
 	case notification.MessageTypeAlert:
+		log.Logf(ctx, "sendMessage: building alert payload alertID=%d", msg.AlertID)
 		name, _, err := p.a.ServiceInfo(ctx, msg.ServiceID)
 		if err != nil {
 			return nil, errors.Wrap(err, "lookup service info")
@@ -120,12 +127,24 @@ func (p *Engine) sendMessage(ctx context.Context, msg *message.Message) (*notifi
 		if err != nil {
 			return nil, errors.Wrap(err, "lookup alert metadata")
 		}
-		applyHighPriorityOverride(ctx, p.b.db, p.cfg.ContactMethodStore, msg, meta, p.cfg.ConfigSource.Config().Alerts.HighPriorityLabelKey, p.cfg.ConfigSource.Config().Alerts.HighPriorityLabelValue)
+		log.Logf(ctx, "sendMessage: fetched alert metadata keys=%d", len(meta))
+		suppress := applyHighPriorityOverride(ctx, p.b.db, p.cfg.ContactMethodStore, msg, meta, p.cfg.ConfigSource.Config().Alerts.HighPriorityLabelKey, p.cfg.ConfigSource.Config().Alerts.HighPriorityLabelValue)
+		if suppress {
+			log.Logf(ctx, "sendMessage: voice notification suppressed by high-priority override")
+			return &notification.SendResult{
+				ID: msg.ID,
+				Status: notification.Status{
+					Details: "voice notification suppressed for non-priority alert",
+					State:   notification.StateFailedPerm,
+				},
+			}, nil
+		}
 		stat, err := p.cfg.NotificationStore.OriginalMessageStatus(ctx, msg.AlertID, msg.DestID)
 		if err != nil {
 			return nil, fmt.Errorf("lookup original message: %w", err)
 		}
 		if stat != nil && stat.ID == msg.ID {
+			log.Logf(ctx, "sendMessage: original message status matched current message; clearing stat reference")
 			// set to nil if it's the current message
 			stat = nil
 		}
@@ -142,6 +161,7 @@ func (p *Engine) sendMessage(ctx context.Context, msg *message.Message) (*notifi
 		}
 		isFirstAlertMessage = stat == nil
 	case notification.MessageTypeAlertStatus:
+		log.Logf(ctx, "sendMessage: building alert status payload logID=%d", msg.AlertLogID)
 		e, err := p.cfg.AlertLogStore.FindOne(ctx, msg.AlertLogID)
 		if err != nil {
 			return nil, errors.Wrap(err, "lookup alert log entry")
@@ -179,10 +199,12 @@ func (p *Engine) sendMessage(ctx context.Context, msg *message.Message) (*notifi
 			OriginalStatus: *stat,
 		}
 	case notification.MessageTypeTest:
+		log.Logf(ctx, "sendMessage: building test notification payload")
 		notifMsg = notification.Test{
 			Base: msg.Base(),
 		}
 	case notification.MessageTypeVerification:
+		log.Logf(ctx, "sendMessage: building verification payload verifyID=%s", msg.VerifyID)
 		code, err := p.cfg.NotificationStore.Code(ctx, msg.VerifyID)
 		if err != nil {
 			return nil, errors.Wrap(err, "lookup verification code")
@@ -192,6 +214,7 @@ func (p *Engine) sendMessage(ctx context.Context, msg *message.Message) (*notifi
 			Code: fmt.Sprintf("%06d", code),
 		}
 	case notification.MessageTypeScheduleOnCallUsers:
+		log.Logf(ctx, "sendMessage: building on-call schedule payload scheduleID=%s", msg.ScheduleID)
 		users, err := p.cfg.OnCallStore.OnCallUsersBySchedule(ctx, msg.ScheduleID)
 		if err != nil {
 			return nil, errors.Wrap(err, "lookup on call users by schedule")
@@ -218,6 +241,7 @@ func (p *Engine) sendMessage(ctx context.Context, msg *message.Message) (*notifi
 			Users:        onCallUsers,
 		}
 	case notification.MessageTypeSignalMessage:
+		log.Logf(ctx, "sendMessage: building signal payload messageID=%s", msg.ID)
 		id, err := uuid.Parse(msg.ID)
 		if err != nil {
 			return nil, errors.Wrap(err, "parse signal message id")
@@ -245,14 +269,17 @@ func (p *Engine) sendMessage(ctx context.Context, msg *message.Message) (*notifi
 	meta := alertlog.NotificationMetaData{
 		MessageID: msg.ID,
 	}
+	log.Logf(ctx, "sendMessage: dispatching via notification manager destType=%s", notifMsg.DestType())
 
 	res, err := p.cfg.NotificationManager.SendMessage(ctx, notifMsg)
 	if err != nil {
 		return nil, err
 	}
+	log.Logf(ctx, "sendMessage: provider result state=%s details=%s", res.State, res.Details)
 
 	switch msg.Type {
 	case notification.MessageTypeAlert:
+		log.Logf(ctx, "sendMessage: recording alert log entry for alertID=%d", msg.AlertID)
 		p.cfg.AlertLogStore.MustLog(ctx, msg.AlertID, alertlog.TypeNotificationSent, meta)
 	case notification.MessageTypeAlertBundle:
 		err = p.cfg.AlertLogStore.LogServiceTx(ctx, nil, msg.ServiceID, alertlog.TypeNotificationSent, meta)
@@ -262,6 +289,7 @@ func (p *Engine) sendMessage(ctx context.Context, msg *message.Message) (*notifi
 	}
 
 	if isFirstAlertMessage && res.State.IsOK() {
+		log.Logf(ctx, "sendMessage: tracking status for alertID=%d dest=%s", msg.AlertID, msg.Dest.String())
 		_, err = p.b.trackStatus.ExecContext(ctx, msg.DestID.NCID, msg.DestID.CMID, msg.AlertID)
 		if err != nil {
 			// non-fatal, but log because it means status updates will not work for that alert/dest.
@@ -269,5 +297,6 @@ func (p *Engine) sendMessage(ctx context.Context, msg *message.Message) (*notifi
 		}
 	}
 
+	log.Logf(ctx, "sendMessage: completed processing for messageID=%s", msg.ID)
 	return res, nil
 }
