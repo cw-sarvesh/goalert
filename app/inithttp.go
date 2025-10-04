@@ -237,38 +237,50 @@ func (app *App) initHTTP(ctx context.Context) error {
 	mux.HandleFunc("GET /api/v2/config", app.ConfigStore.ServeConfig)
 	mux.HandleFunc("PUT /api/v2/config", app.ConfigStore.ServeConfig)
 
-	// Use below code only for testing purpose
-	// // Accept Web Push subscription payloads (UI uses this endpoint).
-	// mux.HandleFunc("POST /api/push/subscribe", func(w http.ResponseWriter, req *http.Request) {
-	// 	data, err := io.ReadAll(io.LimitReader(req.Body, 1<<20))
-	// 	if err != nil {
-	// 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-	// 		return
-	// 	}
-	// 	var tmp struct {
-	// 		Endpoint string `json:"endpoint"`
-	// 	}
-	// 	_ = json.Unmarshal(data, &tmp)
-	// 	if tmp.Endpoint == "" {
-	// 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-	// 		return
-	// 	}
-	// 	uid := permission.UserID(req.Context())
-	// 	if uid == "" {
-	// 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-	// 		return
-	// 	}
-	// 	_, err = app.db.ExecContext(req.Context(), `
-    //         insert into user_web_push_subscriptions (endpoint, user_id, data)
-    //         values ($1, $2::uuid, $3::jsonb)
-    //         on conflict (endpoint) do update set user_id = excluded.user_id, data = excluded.data
-    //     `, tmp.Endpoint, uid, data)
-	// 	if err != nil {
-	// 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-	// 		return
-	// 	}
-	// 	w.WriteHeader(http.StatusNoContent)
-	// })
+	// Accept Web Push subscription payloads (UI uses this endpoint).
+	mux.HandleFunc("POST /api/push/subscribe", func(w http.ResponseWriter, req *http.Request) {
+		ctx := req.Context()
+		data, err := io.ReadAll(io.LimitReader(req.Body, 1<<20))
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			return
+		}
+		var tmp struct {
+			Endpoint string `json:"endpoint"`
+		}
+		if err := json.Unmarshal(data, &tmp); err != nil {
+			log.Logf(ctx, "webpush: invalid subscription payload: %v", err)
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			return
+		}
+		tmp.Endpoint = strings.TrimSpace(tmp.Endpoint)
+		if tmp.Endpoint == "" {
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			return
+		}
+		uid := permission.UserID(ctx)
+		if uid == "" {
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+		_, err = app.db.ExecContext(ctx, `
+		insert into user_web_push_subscriptions (endpoint, user_id, data)
+		values ($1, $2::uuid, $3::jsonb)
+		on conflict (endpoint) do update set user_id = excluded.user_id, data = excluded.data
+	`, tmp.Endpoint, uid, data)
+		if err != nil {
+			log.Logf(ctx, "webpush: store subscription failed: %v", err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+		suffix := tmp.Endpoint
+		const suffixLen = 16
+		if len(suffix) > suffixLen {
+			suffix = suffix[len(suffix)-suffixLen:]
+		}
+		log.Logf(ctx, "webpush: subscription saved; user=%s endpointSuffix=%s", uid, suffix)
+		w.WriteHeader(http.StatusNoContent)
+	})
 
 	// // Admin endpoint to inspect stored Web Push subscriptions.
 	// mux.HandleFunc("GET /api/push/subscriptions", func(w http.ResponseWriter, req *http.Request) {
