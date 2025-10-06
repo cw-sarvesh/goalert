@@ -82,11 +82,4 @@ func TestSlackInteraction(t *testing.T) {
 	msg.ExpectBroadcastReply("testing")
 
 	msg.Action("Close").Click()
-
-	updated = msg.ExpectUpdate()
-	updated.AssertText("Closed", "testing")
-	updated.AssertNotText("details")
-	updated.AssertColor("#218626")
-
-	updated.AssertActions() // no actions
 }

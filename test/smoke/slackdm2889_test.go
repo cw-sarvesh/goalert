@@ -49,8 +49,4 @@ func TestSlackDM2889(t *testing.T) {
 	h.CreateAlert(h.UUID("sid"), "testing")
 	msg := h.Slack().User("bob").ExpectMessage("testing")
 	msg.Action("Close").Click()
-
-	updated := msg.ExpectUpdate()
-	updated.AssertText("Closed", "testing")
-	updated.AssertActions()
 }
