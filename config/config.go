@@ -128,6 +128,14 @@ type Config struct {
 		SMSFromNumberOverride []string `info:"List of 'carrier=number' pairs, SMS messages to numbers of the provided carrier string (exact match) will use the alternate From Number."`
 	}
 
+	Gupshup struct {
+		Enable bool `public:"true" info:"Enables sending SMS notifications through the Gupshup provider."`
+
+		BaseURL string `info:"Optional override for the Gupshup SMS API base URL."`
+		APIKey  string `password:"true" info:"API key used for the Gupshup SMS API."`
+		Source  string `public:"true" info:"Sender ID or phone number registered with Gupshup."`
+	}
+
 	SMTP struct {
 		Enable bool `public:"true" info:"Enables email as a contact method."`
 
@@ -537,6 +545,10 @@ func (cfg Config) Validate() error {
 		}
 	}
 
+	if cfg.Gupshup.BaseURL != "" {
+		err = validate.Many(err, validate.AbsoluteURL("Gupshup.BaseURL", cfg.Gupshup.BaseURL))
+	}
+
 	if cfg.Mailgun.EmailDomain != "" {
 		err = validate.Many(err, validate.Email("Mailgun.EmailDomain", "example@"+cfg.Mailgun.EmailDomain))
 	}
@@ -567,6 +579,11 @@ func (cfg Config) Validate() error {
 			"AccountSID", cfg.Twilio.AccountSID,
 			"AuthToken", cfg.Twilio.AuthToken,
 			"FromNumber", cfg.Twilio.FromNumber,
+		),
+
+		validateEnable("Gupshup", cfg.Gupshup.Enable,
+			"APIKey", cfg.Gupshup.APIKey,
+			"Source", cfg.Gupshup.Source,
 		),
 
 		validateEnable("GitHub", cfg.GitHub.Enable,

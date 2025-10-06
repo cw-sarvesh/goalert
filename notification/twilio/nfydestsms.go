@@ -20,14 +20,16 @@ var _ nfydest.Provider = (*SMS)(nil)
 func (s *SMS) ID() string { return DestTypeTwilioSMS }
 func (s *SMS) TypeInfo(ctx context.Context) (*nfydest.TypeInfo, error) {
 	cfg := config.FromContext(ctx)
+	supportsStatus := cfg.Twilio.Enable && !cfg.Gupshup.Enable
+
 	return &nfydest.TypeInfo{
 		Type:                       DestTypeTwilioSMS,
 		Name:                       "Text Message (SMS)",
-		Enabled:                    cfg.Twilio.Enable,
+		Enabled:                    cfg.Twilio.Enable || cfg.Gupshup.Enable,
 		UserDisclaimer:             cfg.General.NotificationDisclaimer,
 		SupportsAlertNotifications: true,
 		SupportsUserVerification:   true,
-		SupportsStatusUpdates:      true,
+		SupportsStatusUpdates:      supportsStatus,
 		UserVerificationRequired:   true,
 		RequiredFields: []nfydest.FieldConfig{{
 			FieldID:            FieldPhoneNumber,
