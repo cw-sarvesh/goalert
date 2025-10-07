@@ -408,12 +408,14 @@ func (app *App) initHTTP(ctx context.Context) error {
 			// Target only on-call users for the service
 			svcID := permission.ServiceID(req.Context())
 			var tgtUserIDs []string
+			stepNumber := -1
 			if svcID != "" {
 				permission.SudoContext(req.Context(), func(ctx context.Context) {
 					if oc, err := app.OnCallStore.OnCallUsersByService(ctx, svcID); err == nil {
-						for _, u := range oc {
-							tgtUserIDs = append(tgtUserIDs, u.UserID)
-						}
+						var total int
+						total = len(oc)
+						tgtUserIDs, stepNumber = filterPrimaryStepUserIDs(oc)
+						log.Logf(ctx, "webpush: grafana target filtering; serviceID=%s totalUsers=%d filteredUsers=%d step=%d", svcID, total, len(tgtUserIDs), stepNumber)
 					} else {
 						log.Logf(ctx, "webpush: grafana oncall lookup failed: %v", err)
 					}
@@ -457,12 +459,12 @@ func (app *App) initHTTP(ctx context.Context) error {
 			}
 			svcID := permission.ServiceID(req.Context())
 			var tgtUserIDs []string
+			stepNumber := -1
 			if svcID != "" {
 				permission.SudoContext(req.Context(), func(ctx context.Context) {
 					if oc, err := app.OnCallStore.OnCallUsersByService(ctx, svcID); err == nil {
-						for _, u := range oc {
-							tgtUserIDs = append(tgtUserIDs, u.UserID)
-						}
+						tgtUserIDs, stepNumber = filterPrimaryStepUserIDs(oc)
+						log.Logf(ctx, "webpush: generic target filtering; serviceID=%s totalUsers=%d filteredUsers=%d step=%d", svcID, len(oc), len(tgtUserIDs), stepNumber)
 					} else {
 						log.Logf(ctx, "webpush: generic oncall lookup failed: %v", err)
 					}
