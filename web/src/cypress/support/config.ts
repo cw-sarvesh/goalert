@@ -38,6 +38,7 @@ interface Twilio {
   AccountSID: string
   AuthToken: string
   FromNumber: string
+  DisableSMSContactMethod: boolean
 }
 
 interface Feedback {

@@ -71,16 +71,16 @@ func TestGraphQLAlert(t *testing.T) {
 	createCM := func(userID, phone string, cm interface{}) {
 		t.Helper()
 		doQL(fmt.Sprintf(`
-		mutation {
-			createUserContactMethod(input:{
-				userID: "%s",
-				name: "default",
-				type: SMS,
-				value: "%s"
-			}) {
-				id
-			}
-		}
+                mutation {
+                        createUserContactMethod(input:{
+                                userID: "%s",
+                                name: "default",
+                                type: VOICE,
+                                value: "%s"
+                        }) {
+                                id
+                        }
+                }
     `, userID, phone), cm)
 	}
 
@@ -100,8 +100,8 @@ func TestGraphQLAlert(t *testing.T) {
 	sendCMVerification(cm1.CreateUserContactMethod.ID)
 	sendCMVerification(cm2.CreateUserContactMethod.ID)
 
-	msg1 := h.Twilio(t).Device(phone1).ExpectSMS("verification")
-	msg2 := h.Twilio(t).Device(phone2).ExpectSMS("verification")
+	call1 := h.Twilio(t).Device(phone1).ExpectVoice("verification")
+	call2 := h.Twilio(t).Device(phone2).ExpectVoice("verification")
 
 	digits := func(r rune) rune {
 		if r >= '0' && r <= '9' {
@@ -110,11 +110,15 @@ func TestGraphQLAlert(t *testing.T) {
 		return -1
 	}
 
-	codeStr1 := strings.Map(digits, msg1.Body())
-	codeStr2 := strings.Map(digits, msg2.Body())
+	codeStr1 := strings.Map(digits, strings.ReplaceAll(call1.Body(), "6-digit", ""))
+	codeStr2 := strings.Map(digits, strings.ReplaceAll(call2.Body(), "6-digit", ""))
 
-	code1, _ := strconv.Atoi(codeStr1)
-	code2, _ := strconv.Atoi(codeStr2)
+	if len(codeStr1) < 6 || len(codeStr2) < 6 {
+		t.Fatalf("expected verification codes in voice calls; got %q and %q", call1.Body(), call2.Body())
+	}
+
+	code1, _ := strconv.Atoi(codeStr1[:6])
+	code2, _ := strconv.Atoi(codeStr2[:6])
 
 	verifyCM := func(cmID string, code int) {
 		doQL(fmt.Sprintf(`
@@ -253,6 +257,6 @@ func TestGraphQLAlert(t *testing.T) {
 		}
 	`, svc.CreateService.ID), nil)
 
-	h.Twilio(t).Device(phone1).ExpectSMS()
-	h.Twilio(t).Device(phone2).ExpectSMS()
+	h.Twilio(t).Device(phone1).ExpectVoice()
+	h.Twilio(t).Device(phone2).ExpectVoice()
 }

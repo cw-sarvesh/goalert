@@ -210,7 +210,7 @@ func TestSystemLimits(t *testing.T) {
 		limit.ContactMethodsPerUser,
 		"contact methods",
 		func(int) string {
-			return fmt.Sprintf(`mutation{createUserContactMethod(input:{type: SMS, name: "%s", value: "%s", userID: "%s"}){id}}`, uniqName(), h.Phone(""), h.UUID("cm_user"))
+			return fmt.Sprintf(`mutation{createUserContactMethod(input:{type: VOICE, name: "%s", value: "%s", userID: "%s"}){id}}`, uniqName(), h.Phone(""), h.UUID("cm_user"))
 		},
 		func(ids []string) string {
 			return fmt.Sprintf(`mutation{deleteAll(input:[{id: "%s", type: contactMethod}])}`, ids[0])
