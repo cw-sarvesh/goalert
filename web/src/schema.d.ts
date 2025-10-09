@@ -1666,6 +1666,7 @@ type ConfigID =
   | 'Twilio.DisableTwoWaySMS'
   | 'Twilio.SMSCarrierLookup'
   | 'Twilio.SMSFromNumberOverride'
+  | 'Twilio.DisableSMSContactMethod'
   | 'SMTP.Enable'
   | 'SMTP.From'
   | 'SMTP.Address'

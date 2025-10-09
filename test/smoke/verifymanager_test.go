@@ -69,15 +69,15 @@ func TestUserVerificationCleanup(t *testing.T) {
 	createCM := func(t *testing.T, user, name, phone string) (cm *cmCreate) {
 		t.Helper()
 		doQL(t, h, fmt.Sprintf(`
-			mutation {
-				createUserContactMethod(input: {
-					userID: "%s",
-					type: SMS,
-					name: "%s",
-					value: "%s"
-				}) {
-					id
-				}
+                        mutation {
+                                createUserContactMethod(input: {
+                                        userID: "%s",
+                                        type: VOICE,
+                                        name: "%s",
+                                        value: "%s"
+                                }) {
+                                        id
+                                }
 			}
 		`, user, name, phone), &cm)
 		return
@@ -102,15 +102,20 @@ func TestUserVerificationCleanup(t *testing.T) {
 	d1 := tw.Device(h.Phone("3"))
 	d2 := tw.Device(h.Phone("4"))
 
-	d1Msg := d1.ExpectSMS("verification")
-	d2.ExpectSMS("verification")
+	call := d1.ExpectVoice("verification")
+	d2.ExpectVoice("verification")
 
-	code := strings.Map(func(r rune) rune {
+	codeDigits := strings.Map(func(r rune) rune {
 		if r >= '0' && r <= '9' {
 			return r
 		}
 		return -1
-	}, d1Msg.Body())
+	}, strings.ReplaceAll(call.Body(), "6-digit", ""))
+
+	if len(codeDigits) < 6 {
+		t.Fatalf("expected verification code in voice call, got %q", call.Body())
+	}
+	code := codeDigits[:6]
 
 	doQL(t, h, fmt.Sprintf(`
 		mutation {

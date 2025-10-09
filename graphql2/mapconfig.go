@@ -82,6 +82,7 @@ func MapConfigValues(cfg config.Config) []ConfigValue {
 		{ID: "Twilio.DisableTwoWaySMS", Type: ConfigTypeBoolean, Description: "Disables SMS reply codes for alert messages.", Value: fmt.Sprintf("%t", cfg.Twilio.DisableTwoWaySMS)},
 		{ID: "Twilio.SMSCarrierLookup", Type: ConfigTypeBoolean, Description: "Perform carrier lookup of SMS contact methods (required for SMSFromNumberOverride). Extra charges may apply.", Value: fmt.Sprintf("%t", cfg.Twilio.SMSCarrierLookup)},
 		{ID: "Twilio.SMSFromNumberOverride", Type: ConfigTypeStringList, Description: "List of 'carrier=number' pairs, SMS messages to numbers of the provided carrier string (exact match) will use the alternate From Number.", Value: strings.Join(cfg.Twilio.SMSFromNumberOverride, "\n")},
+		{ID: "Twilio.DisableSMSContactMethod", Type: ConfigTypeBoolean, Description: "Disables SMS as a contact method option for users.", Value: fmt.Sprintf("%t", cfg.Twilio.DisableSMSContactMethod)},
 		{ID: "SMTP.Enable", Type: ConfigTypeBoolean, Description: "Enables email as a contact method.", Value: fmt.Sprintf("%t", cfg.SMTP.Enable)},
 		{ID: "SMTP.From", Type: ConfigTypeString, Description: "The email address messages should be sent from.", Value: cfg.SMTP.From},
 		{ID: "SMTP.Address", Type: ConfigTypeString, Description: "The server address to use for sending email. Port is optional and defaults to 465, or 25 if Disable TLS is set. Common ports are: 25 or 587 for STARTTLS (or unencrypted) and 465 for TLS.", Value: cfg.SMTP.Address},
@@ -128,6 +129,7 @@ func MapPublicConfigValues(cfg config.Config) []ConfigValue {
 		{ID: "Twilio.Enable", Type: ConfigTypeBoolean, Description: "Enables sending and processing of Voice and SMS messages through the Twilio notification provider.", Value: fmt.Sprintf("%t", cfg.Twilio.Enable)},
 		{ID: "Twilio.FromNumber", Type: ConfigTypeString, Description: "The Twilio number to use for outgoing notifications.", Value: cfg.Twilio.FromNumber},
 		{ID: "Twilio.MessagingServiceSID", Type: ConfigTypeString, Description: "If set, replaces the use of From Number for SMS notifications.", Value: cfg.Twilio.MessagingServiceSID},
+		{ID: "Twilio.DisableSMSContactMethod", Type: ConfigTypeBoolean, Description: "Disables SMS as a contact method option for users.", Value: fmt.Sprintf("%t", cfg.Twilio.DisableSMSContactMethod)},
 		{ID: "SMTP.Enable", Type: ConfigTypeBoolean, Description: "Enables email as a contact method.", Value: fmt.Sprintf("%t", cfg.SMTP.Enable)},
 		{ID: "SMTP.From", Type: ConfigTypeString, Description: "The email address messages should be sent from.", Value: cfg.SMTP.From},
 		{ID: "Webhook.Enable", Type: ConfigTypeBoolean, Description: "Enables webhook as a contact method.", Value: fmt.Sprintf("%t", cfg.Webhook.Enable)},
@@ -364,6 +366,12 @@ func ApplyConfigValues(cfg config.Config, vals []ConfigValueInput) (config.Confi
 			cfg.Twilio.SMSCarrierLookup = val
 		case "Twilio.SMSFromNumberOverride":
 			cfg.Twilio.SMSFromNumberOverride = parseStringList(v.Value)
+		case "Twilio.DisableSMSContactMethod":
+			val, err := parseBool(v.ID, v.Value)
+			if err != nil {
+				return cfg, err
+			}
+			cfg.Twilio.DisableSMSContactMethod = val
 		case "SMTP.Enable":
 			val, err := parseBool(v.ID, v.Value)
 			if err != nil {

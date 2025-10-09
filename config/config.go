@@ -123,9 +123,10 @@ type Config struct {
 
 		RCSSenderID string `info:"The sender ID for RCS messages. Required if RCS is enabled for the MessagingServiceSID."`
 
-		DisableTwoWaySMS      bool     `info:"Disables SMS reply codes for alert messages."`
-		SMSCarrierLookup      bool     `info:"Perform carrier lookup of SMS contact methods (required for SMSFromNumberOverride). Extra charges may apply."`
-		SMSFromNumberOverride []string `info:"List of 'carrier=number' pairs, SMS messages to numbers of the provided carrier string (exact match) will use the alternate From Number."`
+		DisableTwoWaySMS        bool     `info:"Disables SMS reply codes for alert messages."`
+		SMSCarrierLookup        bool     `info:"Perform carrier lookup of SMS contact methods (required for SMSFromNumberOverride). Extra charges may apply."`
+		SMSFromNumberOverride   []string `info:"List of 'carrier=number' pairs, SMS messages to numbers of the provided carrier string (exact match) will use the alternate From Number."`
+		DisableSMSContactMethod bool     `public:"true" info:"Disables SMS as a contact method option for users."`
 	}
 
 	SMTP struct {
