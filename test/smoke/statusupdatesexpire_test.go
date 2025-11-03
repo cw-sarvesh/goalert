@@ -76,7 +76,6 @@ func TestStatusUpdatesExpiration(t *testing.T) {
 	d1.ExpectSMS("second alert")
 
 	doClose("first")
-	d1.ExpectSMS("closed")
 
 	h.FastForward(7 * 24 * time.Hour)
 

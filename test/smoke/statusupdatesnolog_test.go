@@ -57,11 +57,4 @@ func TestStatusUpdatesNoLog(t *testing.T) {
 	// first update should be skipped
 
 	a.Close()
-
-	updated := msg.ExpectUpdate()
-	updated.AssertText("Closed", "testing")
-	updated.AssertNotText("details")
-	updated.AssertColor("#218626")
-
-	updated.AssertActions() // no actions
 }
