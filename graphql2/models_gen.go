@@ -1177,6 +1177,7 @@ const (
 	ContactMethodTypeSms     ContactMethodType = "SMS"
 	ContactMethodTypeVoice   ContactMethodType = "VOICE"
 	ContactMethodTypeEmail   ContactMethodType = "EMAIL"
+	ContactMethodTypePush    ContactMethodType = "PUSH"
 	ContactMethodTypeWebhook ContactMethodType = "WEBHOOK"
 	ContactMethodTypeSLACkDm ContactMethodType = "SLACK_DM"
 )
@@ -1185,13 +1186,14 @@ var AllContactMethodType = []ContactMethodType{
 	ContactMethodTypeSms,
 	ContactMethodTypeVoice,
 	ContactMethodTypeEmail,
+	ContactMethodTypePush,
 	ContactMethodTypeWebhook,
 	ContactMethodTypeSLACkDm,
 }
 
 func (e ContactMethodType) IsValid() bool {
 	switch e {
-	case ContactMethodTypeSms, ContactMethodTypeVoice, ContactMethodTypeEmail, ContactMethodTypeWebhook, ContactMethodTypeSLACkDm:
+	case ContactMethodTypeSms, ContactMethodTypeVoice, ContactMethodTypeEmail, ContactMethodTypePush, ContactMethodTypeWebhook, ContactMethodTypeSLACkDm:
 		return true
 	}
 	return false

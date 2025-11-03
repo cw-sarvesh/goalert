@@ -6,10 +6,13 @@ import (
 	"errors"
 
 	"github.com/target/goalert/config"
+	"github.com/target/goalert/gadb"
 	"github.com/target/goalert/graphql2"
 	"github.com/target/goalert/notification"
 	"github.com/target/goalert/notification/twilio"
+	"github.com/target/goalert/notification/webpush"
 	"github.com/target/goalert/user/contactmethod"
+	"github.com/target/goalert/util/log"
 	"github.com/target/goalert/validation"
 	"github.com/target/goalert/validation/validate"
 )
@@ -24,6 +27,9 @@ func (a *App) UserContactMethod() graphql2.UserContactMethodResolver {
 
 func (a *ContactMethod) Type(ctx context.Context, obj *contactmethod.ContactMethod) (*graphql2.ContactMethodType, error) {
 	cmType, _ := CompatDestToCMTypeVal(obj.Dest)
+	if !cmType.IsValid() {
+		return nil, nil
+	}
 	return &cmType, nil
 }
 
@@ -123,20 +129,35 @@ func (m *Mutation) CreateUserContactMethod(ctx context.Context, input graphql2.C
 		StatusUpdates: input.EnableStatusUpdates != nil && *input.EnableStatusUpdates,
 	}
 
+	var dest gadb.DestV1
+	destField := "input.dest"
+
 	if input.Dest != nil {
-		if err := (*App)(m).ValidateDestination(ctx, "input.dest", input.Dest); err != nil {
-			return nil, err
-		}
-		cm.Dest = *input.Dest
+		dest = *input.Dest
 	} else if input.Type != nil && input.Value != nil {
 		var err error
-		cm.Dest, err = CompatCMTypeValToDest(*input.Type, *input.Value)
+		destField = "input"
+		dest, err = CompatCMTypeValToDest(*input.Type, *input.Value)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		return nil, validation.NewFieldError("input", "must provide either dest or type/value")
 	}
+
+	if err := ensureWebPushDestination(destField, input.UserID, &dest); err != nil {
+		return nil, err
+	}
+
+	if err := (*App)(m).ValidateDestination(ctx, destField, &dest); err != nil {
+		return nil, err
+	}
+
+	if dest.Type == webpush.DestTypeWebPush {
+		log.Logf(ctx, "webpush: creating contact method; user=%s", input.UserID)
+	}
+
+	cm.Dest = dest
 
 	err := withContextTx(ctx, m.DB, func(ctx context.Context, tx *sql.Tx) error {
 		var err error
@@ -213,4 +234,21 @@ func (m *Mutation) VerifyContactMethod(ctx context.Context, input graphql2.Verif
 
 	err = m.NotificationStore.VerifyContactMethod(ctx, input.ContactMethodID, input.Code)
 	return err == nil, err
+}
+
+func ensureWebPushDestination(field, userID string, dest *gadb.DestV1) error {
+	if dest.Type != webpush.DestTypeWebPush {
+		return nil
+	}
+
+	if userID == "" {
+		return validation.NewFieldError(field, "web push contact methods require a user ID")
+	}
+
+	if existing := dest.Arg(webpush.FieldUserID); existing != "" && existing != userID {
+		return validation.NewFieldError(field, "web push destination already belongs to another user")
+	}
+
+	dest.SetArg(webpush.FieldUserID, userID)
+	return nil
 }

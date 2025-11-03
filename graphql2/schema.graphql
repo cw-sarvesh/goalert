@@ -1368,6 +1368,7 @@ enum ContactMethodType {
   SMS
   VOICE
   EMAIL
+  PUSH
   WEBHOOK
   SLACK_DM
 }

@@ -27,3 +27,20 @@ func TestSplitPendingByType(t *testing.T) {
 	}, remainder)
 
 }
+
+func TestSplitPendingByTypeFiltersAcknowledgedAlerts(t *testing.T) {
+	msgs := []Message{
+		{Type: notification.MessageTypeAlert, AlertStatus: notification.AlertStateAcknowledged},
+		{Type: notification.MessageTypeAlert, AlertStatus: notification.AlertStateUnacknowledged},
+		{Type: notification.MessageTypeAlert, AlertStatus: notification.AlertStateClosed},
+	}
+
+	match, remainder := splitPendingByType(msgs, notification.MessageTypeAlert)
+	assert.ElementsMatch(t, []Message{
+		{Type: notification.MessageTypeAlert, AlertStatus: notification.AlertStateUnacknowledged},
+	}, match)
+	assert.ElementsMatch(t, []Message{
+		{Type: notification.MessageTypeAlert, AlertStatus: notification.AlertStateAcknowledged},
+		{Type: notification.MessageTypeAlert, AlertStatus: notification.AlertStateClosed},
+	}, remainder)
+}

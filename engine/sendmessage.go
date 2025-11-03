@@ -275,7 +275,7 @@ func (p *Engine) sendMessage(ctx context.Context, msg *message.Message) (*notifi
 	if err != nil {
 		return nil, err
 	}
-	log.Logf(ctx, "sendMessage: provider result state=%s details=%s", res.State, res.Details)
+	log.Logf(ctx, "sendMessage: provider result state=%v details=%s", res.State, res.Details)
 
 	switch msg.Type {
 	case notification.MessageTypeAlert:

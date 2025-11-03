@@ -96,8 +96,8 @@ func MapConfigValues(cfg config.Config) []ConfigValue {
 		{ID: "Feedback.OverrideURL", Type: ConfigTypeString, Description: "Use a custom URL for Feedback link in nav bar.", Value: cfg.Feedback.OverrideURL},
 		{ID: "WebPush.Enable", Type: ConfigTypeBoolean, Description: "Enable Web Push notifications (requires VAPID keys).", Value: fmt.Sprintf("%t", cfg.WebPush.Enable)},
 		{ID: "WebPush.VAPIDPublicKey", Type: ConfigTypeString, Description: "Public VAPID key (Base64 URL-safe, unpadded) exposed to clients.", Value: cfg.WebPush.VAPIDPublicKey},
-		{ID: "WebPush.SubscriberEmail", Type: ConfigTypeString, Description: "Email address used for the VAPID contact (sub) claim.", Value: cfg.WebPush.SubscriberEmail},
 		{ID: "WebPush.VAPIDPrivateKey", Type: ConfigTypeString, Description: "Private VAPID key used for signing push messages (keep secret).", Value: cfg.WebPush.VAPIDPrivateKey, Password: true},
+		{ID: "WebPush.SubscriberEmail", Type: ConfigTypeString, Description: "Email address used for the VAPID contact (sub) claim.", Value: cfg.WebPush.SubscriberEmail},
 	}
 }
 
@@ -422,10 +422,10 @@ func ApplyConfigValues(cfg config.Config, vals []ConfigValueInput) (config.Confi
 			cfg.WebPush.Enable = val
 		case "WebPush.VAPIDPublicKey":
 			cfg.WebPush.VAPIDPublicKey = v.Value
-		case "WebPush.SubscriberEmail":
-			cfg.WebPush.SubscriberEmail = v.Value
 		case "WebPush.VAPIDPrivateKey":
 			cfg.WebPush.VAPIDPrivateKey = v.Value
+		case "WebPush.SubscriberEmail":
+			cfg.WebPush.SubscriberEmail = v.Value
 		default:
 			return cfg, validation.NewFieldError("ID", fmt.Sprintf("unknown config ID '%s'", v.ID))
 		}

@@ -216,6 +216,7 @@ export interface ConfigValueInput {
 
 export type ContactMethodType =
   | 'EMAIL'
+  | 'PUSH'
   | 'SLACK_DM'
   | 'SMS'
   | 'VOICE'

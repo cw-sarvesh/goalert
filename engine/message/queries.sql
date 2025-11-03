@@ -13,15 +13,17 @@ SELECT
     msg.created_at,
     msg.sent_at,
     msg.status_alert_ids,
-    msg.schedule_id
+    msg.schedule_id,
+    alerts.status AS alert_status
 FROM
     outgoing_messages msg
     LEFT JOIN user_contact_methods cm ON cm.id = msg.contact_method_id
     LEFT JOIN notification_channels chan ON chan.id = msg.channel_id
+    LEFT JOIN alerts ON alerts.id = msg.alert_id
+    LEFT JOIN alert_logs ack_log ON ack_log.alert_id = msg.alert_id AND ack_log.event = 'acknowledged'
 WHERE
     sent_at >= $1
     OR last_status = 'pending'
     AND (msg.contact_method_id ISNULL
         OR msg.message_type = 'verification_message'
         OR NOT cm.disabled);
-

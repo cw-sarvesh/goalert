@@ -215,6 +215,8 @@ BEGIN
         RETURN jsonb_build_object('Type', 'builtin-webhook', 'Args', jsonb_build_object('webhook_url', value));
     ELSIF typeName = 'SLACK_DM' THEN
         RETURN jsonb_build_object('Type', 'builtin-slack-dm', 'Args', jsonb_build_object('slack_user_id', value));
+    ELSIF typeName = 'PUSH' THEN
+        RETURN jsonb_build_object('Type', 'builtin-web-push', 'Args', '{}'::jsonb);
     ELSE
         -- throw an error
         RAISE EXCEPTION 'Unknown contact method type: %', typeName;
@@ -382,6 +384,9 @@ BEGIN
     ELSIF NEW.dest ->> 'Type' = 'builtin-slack-dm' THEN
         NEW.type = 'SLACK_DM';
         NEW.value = NEW.dest -> 'Args' ->> 'slack_user_id';
+    ELSIF NEW.dest ->> 'Type' = 'builtin-web-push' THEN
+        NEW.type = 'PUSH';
+        NEW.value = NULL;
     ELSE
         NEW.type = 'DEST';
         NEW.value = gen_random_uuid()::text;
@@ -2703,4 +2708,3 @@ CREATE SEQUENCE incident_number_seq
 	MINVALUE 1
 	MAXVALUE 9223372036854775807
 	CACHE 1;
-

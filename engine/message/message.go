@@ -25,6 +25,7 @@ type Message struct {
 	SentAt     time.Time
 
 	StatusAlertIDs []int64
+	AlertStatus    notification.AlertState
 }
 
 func (m Message) Base() nfymsg.Base {

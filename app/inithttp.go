@@ -1,19 +1,8 @@
 package app
 
 import (
-	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"net/mail"
-	"net/url"
-	"strings"
-	"time"
-
-	webpush "github.com/SherClockHolmes/webpush-go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/target/goalert/config"
 	"github.com/target/goalert/expflag"
@@ -27,6 +16,11 @@ import (
 	"github.com/target/goalert/util/errutil"
 	"github.com/target/goalert/util/log"
 	"github.com/target/goalert/web"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
 )
 
 func (app *App) initHTTP(ctx context.Context) error {
@@ -133,98 +127,6 @@ func (app *App) initHTTP(ctx context.Context) error {
     `); err != nil {
 		return err
 	}
-	sendPush := func(ctx context.Context, payload []byte, userIDs ...string) {
-		// Use a background context carrying logger + config to avoid request cancellation.
-		ctx = app.Context(log.FromContext(ctx).BackgroundContext())
-		cfg := config.FromContext(ctx)
-		if !cfg.WebPush.Enable || cfg.WebPush.VAPIDPublicKey == "" || cfg.WebPush.VAPIDPrivateKey == "" {
-			log.Logf(ctx, "webpush: disabled or missing VAPID keys; skipping send (enabled=%t)", cfg.WebPush.Enable)
-			return
-		}
-		subscriber := cfg.WebPush.SubscriberEmail
-		if subscriber != "" {
-			addr, err := mail.ParseAddress(subscriber)
-			if err != nil || addr.Address == "" {
-				log.Logf(ctx, "webpush: invalid subscriber email %q: %v", subscriber, err)
-				subscriber = ""
-			} else {
-				subscriber = strings.ToLower(addr.Address)
-			}
-		}
-		if subscriber == "" {
-			subscriber = "no-reply@localhost"
-			if pubURL := cfg.PublicURL(); pubURL != "" {
-				if u, err := url.Parse(pubURL); err == nil {
-					host := u.Hostname()
-					switch host {
-					case "", "localhost", "127.0.0.1", "::1":
-						// keep default placeholder for local development
-					default:
-						subscriber = "no-reply@" + host
-					}
-				}
-			}
-		}
-		type subKeys struct{ P256dh, Auth string }
-		type sub struct {
-			Endpoint string  `json:"endpoint"`
-			Keys     subKeys `json:"keys"`
-		}
-		var rows *sql.Rows
-		var err error
-		if len(userIDs) == 0 {
-			rows, err = app.db.QueryContext(ctx, `select data from user_web_push_subscriptions`)
-		} else {
-			var sb strings.Builder
-			sb.WriteString("select data from user_web_push_subscriptions where user_id in (")
-			for i := range userIDs {
-				if i > 0 {
-					sb.WriteString(",")
-				}
-				fmt.Fprintf(&sb, "$%d::uuid", i+1)
-			}
-			sb.WriteString(")")
-			args := make([]any, len(userIDs))
-			for i, id := range userIDs {
-				args[i] = id
-			}
-			rows, err = app.db.QueryContext(ctx, sb.String(), args...)
-		}
-		if err != nil {
-			log.Logf(ctx, "webpush: query subscriptions failed: %v", err)
-			return
-		}
-		defer rows.Close()
-		var total int
-		for rows.Next() {
-			var raw json.RawMessage
-			if err := rows.Scan(&raw); err != nil {
-				continue
-			}
-			var s sub
-			if err := json.Unmarshal(raw, &s); err != nil || s.Endpoint == "" || s.Keys.P256dh == "" || s.Keys.Auth == "" {
-				continue
-			}
-			subObj := &webpush.Subscription{Endpoint: s.Endpoint, Keys: webpush.Keys{Auth: s.Keys.Auth, P256dh: s.Keys.P256dh}}
-			go func(subObj *webpush.Subscription) {
-				resp, err := webpush.SendNotification(payload, subObj, &webpush.Options{
-					Subscriber:      subscriber,
-					VAPIDPublicKey:  cfg.WebPush.VAPIDPublicKey,
-					VAPIDPrivateKey: cfg.WebPush.VAPIDPrivateKey,
-					TTL:             60,
-				})
-				if resp != nil {
-					_ = resp.Body.Close()
-				}
-				if err != nil {
-					log.Logf(ctx, "webpush: send failed: %v", err)
-				}
-			}(subObj)
-			total++
-		}
-		log.Logf(ctx, "webpush: queued sends; targeted-users=%d total-subs=%d", len(userIDs), total)
-	}
-
 	generic := genericapi.NewHandler(genericapi.Config{
 		AlertStore:          app.AlertStore,
 		IntegrationKeyStore: app.IntegrationKeyStore,
@@ -385,104 +287,11 @@ func (app *App) initHTTP(ctx context.Context) error {
 		mux.HandleFunc("POST /api/v2/uik", app.UIKHandler.ServeHTTP)
 	}
 	mux.HandleFunc("POST /api/v2/mailgun/incoming", mailgun.IngressWebhooks(app.AlertStore, app.IntegrationKeyStore))
-	{
-		inner := grafana.GrafanaToEventsAPI(app.AlertStore, app.IntegrationKeyStore)
-		mux.HandleFunc("POST /api/v2/grafana/incoming", func(w http.ResponseWriter, req *http.Request) {
-			b, _ := io.ReadAll(io.LimitReader(req.Body, 1<<20))
-			req.Body = io.NopCloser(bytes.NewReader(b))
-			inner(w, req)
-
-			var p struct {
-				Title             string            `json:"title"`
-				CommonAnnotations map[string]string `json:"commonAnnotations"`
-			}
-			_ = json.Unmarshal(b, &p)
-			title := p.Title
-			body := p.CommonAnnotations["summary"]
-			if body == "" {
-				body = p.CommonAnnotations["message"]
-			}
-			if title == "" && body == "" {
-				return
-			}
-			// Target only on-call users for the service
-			svcID := permission.ServiceID(req.Context())
-			var tgtUserIDs []string
-			if svcID != "" {
-				permission.SudoContext(req.Context(), func(ctx context.Context) {
-					if oc, err := app.OnCallStore.OnCallUsersByService(ctx, svcID); err == nil {
-						for _, u := range oc {
-							tgtUserIDs = append(tgtUserIDs, u.UserID)
-						}
-					} else {
-						log.Logf(ctx, "webpush: grafana oncall lookup failed: %v", err)
-					}
-				})
-			}
-			log.Logf(req.Context(), "webpush: grafana incoming; serviceID=%s title=%q body.len=%d target-users=%d", svcID, title, len(body), len(tgtUserIDs))
-			note := struct {
-				OnCall bool   `json:"onCall"`
-				Title  string `json:"title"`
-				Body   string `json:"body"`
-				URL    string `json:"url"`
-			}{OnCall: true, Title: title, Body: body, URL: "/alerts"}
-			payload, _ := json.Marshal(note)
-			// Send only to on-call users (skip if none)
-			if len(tgtUserIDs) == 0 {
-				log.Logf(req.Context(), "webpush: no on-call users; skipping send")
-			} else {
-				go sendPush(req.Context(), payload, tgtUserIDs...)
-			}
-		})
-	}
+	mux.HandleFunc("POST /api/v2/grafana/incoming", grafana.GrafanaToEventsAPI(app.AlertStore, app.IntegrationKeyStore))
 	mux.HandleFunc("POST /api/v2/site24x7/incoming", site24x7.Site24x7ToEventsAPI(app.AlertStore, app.IntegrationKeyStore))
 	mux.HandleFunc("POST /api/v2/prometheusalertmanager/incoming", prometheus.PrometheusAlertmanagerEventsAPI(app.AlertStore, app.IntegrationKeyStore))
 
-	// Wrap generic incoming to also fan out web push notifications
-	{
-		h := generic.ServeCreateAlert
-		mux.HandleFunc("POST /api/v2/generic/incoming", func(w http.ResponseWriter, req *http.Request) {
-			b, _ := io.ReadAll(io.LimitReader(req.Body, 1<<20))
-			req.Body = io.NopCloser(bytes.NewReader(b))
-			h(w, req)
-
-			// Attempt to extract a title/body for the notification
-			var p struct {
-				Summary string `json:"summary"`
-				Details string `json:"details"`
-			}
-			_ = json.Unmarshal(b, &p)
-			if p.Summary == "" && p.Details == "" {
-				return
-			}
-			svcID := permission.ServiceID(req.Context())
-			var tgtUserIDs []string
-			if svcID != "" {
-				permission.SudoContext(req.Context(), func(ctx context.Context) {
-					if oc, err := app.OnCallStore.OnCallUsersByService(ctx, svcID); err == nil {
-						for _, u := range oc {
-							tgtUserIDs = append(tgtUserIDs, u.UserID)
-						}
-					} else {
-						log.Logf(ctx, "webpush: generic oncall lookup failed: %v", err)
-					}
-				})
-			}
-			log.Logf(req.Context(), "webpush: generic incoming; serviceID=%s title=%q body.len=%d target-users=%d", svcID, p.Summary, len(p.Details), len(tgtUserIDs))
-			note := struct {
-				Title string `json:"title"`
-				Body  string `json:"body"`
-				URL   string `json:"url"`
-			}{Title: p.Summary, Body: p.Details, URL: "/alerts"}
-			payload, _ := json.Marshal(note)
-			// Send only to on-call users (skip if none)
-			if len(tgtUserIDs) == 0 {
-				log.Logf(req.Context(), "webpush: no on-call users; skipping send")
-			} else {
-				go sendPush(req.Context(), payload, tgtUserIDs...)
-			}
-		})
-	}
+	mux.HandleFunc("POST /api/v2/generic/incoming", generic.ServeCreateAlert)
 	mux.HandleFunc("POST /api/v2/heartbeat/{heartbeatID}", generic.ServeHeartbeatCheck)
 	mux.HandleFunc("GET /api/v2/user-avatar/{userID}", generic.ServeUserAvatar)
 	mux.HandleFunc("GET /api/v2/calendar", app.CalSubStore.ServeICalData)
