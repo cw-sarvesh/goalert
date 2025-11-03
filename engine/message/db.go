@@ -341,6 +341,19 @@ func (db *DB) currentQueue(ctx context.Context, tx *sql.Tx, now time.Time) (*que
 		if row.ScheduleID.Valid {
 			msg.ScheduleID = row.ScheduleID.UUID.String()
 		}
+		msg.AlertStatus = notification.AlertStateUnknown
+		if row.AlertStatus.Valid {
+			switch row.AlertStatus.EnumAlertStatus {
+			case gadb.EnumAlertStatusClosed:
+				msg.AlertStatus = notification.AlertStateClosed
+			case gadb.EnumAlertStatusTriggered, gadb.EnumAlertStatusActive:
+				msg.AlertStatus = notification.AlertStateUnacknowledged
+			default:
+				if string(row.AlertStatus.EnumAlertStatus) == "acknowledged" {
+					msg.AlertStatus = notification.AlertStateAcknowledged
+				}
+			}
+		}
 		if msg.Dest.Type == "" {
 			log.Debugf(ctx, "unknown message type for message %s", msg.ID)
 			continue

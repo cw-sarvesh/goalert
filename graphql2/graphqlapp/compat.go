@@ -11,6 +11,7 @@ import (
 	"github.com/target/goalert/notification/slack"
 	"github.com/target/goalert/notification/twilio"
 	"github.com/target/goalert/notification/webhook"
+	"github.com/target/goalert/notification/webpush"
 	"github.com/target/goalert/schedule"
 	"github.com/target/goalert/schedule/rotation"
 	"github.com/target/goalert/user"
@@ -76,6 +77,8 @@ func CompatDestToCMTypeVal(d gadb.DestV1) (graphql2.ContactMethodType, string) {
 		return graphql2.ContactMethodTypeWebhook, d.Arg(webhook.FieldWebhookURL)
 	case slack.DestTypeSlackDirectMessage:
 		return graphql2.ContactMethodTypeSLACkDm, d.Arg(slack.FieldSlackUserID)
+	case webpush.DestTypeWebPush:
+		return graphql2.ContactMethodTypePush, ""
 	}
 
 	return "", ""
@@ -93,6 +96,8 @@ func CompatCMTypeValToDest(cmType graphql2.ContactMethodType, value string) (gad
 		return slack.NewDirectMessageDest(value), nil
 	case graphql2.ContactMethodTypeWebhook:
 		return webhook.NewWebhookDest(value), nil
+	case graphql2.ContactMethodTypePush:
+		return webpush.NewDest(""), nil
 	}
 
 	return gadb.DestV1{}, validation.NewFieldError("input.Type", "unsupported type")

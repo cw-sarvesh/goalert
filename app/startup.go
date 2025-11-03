@@ -9,6 +9,7 @@ import (
 	"github.com/target/goalert/expflag"
 	"github.com/target/goalert/notification/email"
 	"github.com/target/goalert/notification/webhook"
+	"github.com/target/goalert/notification/webpush"
 	"github.com/target/goalert/retry"
 
 	"github.com/pkg/errors"
@@ -95,6 +96,7 @@ func (app *App) startup(ctx context.Context) error {
 	app.DestRegistry.RegisterProvider(ctx, app.slackChan.DMSender())
 	app.DestRegistry.RegisterProvider(ctx, app.slackChan.UserGroupSender())
 	app.DestRegistry.RegisterProvider(ctx, webhook.NewSender(ctx, app.httpClient))
+	app.DestRegistry.RegisterProvider(ctx, webpush.NewSender(app.db))
 	if app.cfg.StubNotifiers {
 		app.DestRegistry.StubNotifiers()
 	}

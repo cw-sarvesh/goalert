@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/target/goalert/gadb"
 	"github.com/target/goalert/notification/nfydest"
+	"github.com/target/goalert/notification/webpush"
 	"github.com/target/goalert/permission"
 	"github.com/target/goalert/util/log"
 	"github.com/target/goalert/validation"
@@ -165,9 +166,16 @@ func (s *Store) Delete(ctx context.Context, dbtx gadb.DBTX, ids ...string) error
 		return err
 	}
 
-	if permission.Admin(ctx) {
-		err = gadb.New(dbtx).DeleteContactMethod(ctx, uids)
+	cmRows, err := gadb.New(dbtx).ContactMethodFindMany(ctx, uids)
+	if err != nil {
 		return err
+	}
+
+	if permission.Admin(ctx) {
+		if err := gadb.New(dbtx).DeleteContactMethod(ctx, uids); err != nil {
+			return err
+		}
+		return s.cleanupWebPush(ctx, dbtx, cmRows)
 	}
 
 	rows, err := gadb.New(dbtx).ContactMethodLookupUserID(ctx, uids)
@@ -185,8 +193,11 @@ func (s *Store) Delete(ctx context.Context, dbtx gadb.DBTX, ids ...string) error
 		return err
 	}
 
-	err = gadb.New(dbtx).DeleteContactMethod(ctx, uids)
-	return err
+	if err := gadb.New(dbtx).DeleteContactMethod(ctx, uids); err != nil {
+		return err
+	}
+
+	return s.cleanupWebPush(ctx, dbtx, cmRows)
 }
 
 // FindOneTx finds the contact method from the database using the provided ID within a transaction.
@@ -285,6 +296,27 @@ func (s *Store) FindMany(ctx context.Context, dbtx gadb.DBTX, ids []string) ([]C
 	}
 
 	return cms, nil
+}
+
+func (s *Store) cleanupWebPush(ctx context.Context, dbtx gadb.DBTX, cms []gadb.UserContactMethod) error {
+	users := make(map[string]struct{})
+	for _, cm := range cms {
+		if !cm.Dest.Valid {
+			continue
+		}
+		if cm.Dest.DestV1.Type != webpush.DestTypeWebPush {
+			continue
+		}
+		users[cm.UserID.String()] = struct{}{}
+	}
+
+	for uid := range users {
+		if err := webpush.RemoveUserSubscriptions(ctx, dbtx, uid); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // FindAll finds all contact methods from the database associated with the given user ID.

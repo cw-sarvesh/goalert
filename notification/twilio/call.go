@@ -87,9 +87,7 @@ func (call *Call) messageStatus() *notification.Status {
 		status.State = notification.StateDelivered
 	case CallStatusInitiated, CallStatusQueued:
 		status.State = notification.StateSending
-	case CallStatusBusy:
-		status.State = notification.StateFailedTemp
-	case CallStatusFailed, CallStatusCanceled, CallStatusNoAnswer:
+	case CallStatusBusy, CallStatusFailed, CallStatusCanceled, CallStatusNoAnswer:
 		status.State = notification.StateFailedPerm
 	default:
 		status.State = notification.StateSent

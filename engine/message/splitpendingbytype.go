@@ -2,6 +2,7 @@ package message
 
 import (
 	"github.com/target/goalert/gadb"
+	"github.com/target/goalert/notification"
 )
 
 // splitPendingByType will split a list of messages returning only unsent and matching at least one of the provided
@@ -17,6 +18,13 @@ mainLoop:
 		for _, t := range types {
 			if msg.Type != t {
 				continue
+			}
+
+			if msg.Type == notification.MessageTypeAlert {
+				if msg.AlertStatus == notification.AlertStateAcknowledged || msg.AlertStatus == notification.AlertStateClosed {
+					remainder = append(remainder, msg)
+					continue mainLoop
+				}
 			}
 
 			matching = append(matching, msg)
