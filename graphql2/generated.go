@@ -6752,29 +6752,12 @@ func (ec *executionContext) field_Service_alertStats_args(ctx context.Context, r
 func (ec *executionContext) field_Service_recentEvents_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := ec.field_Service_recentEvents_argsInput(ctx, rawArgs)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalOAlertRecentEventsOptions2ᚖgithubᚗcomᚋtargetᚋgoalertᚋgraphql2ᚐAlertRecentEventsOptions)
 	if err != nil {
 		return nil, err
 	}
 	args["input"] = arg0
 	return args, nil
-}
-func (ec *executionContext) field_Service_recentEvents_argsInput(
-	ctx context.Context,
-	rawArgs map[string]any,
-) (*AlertRecentEventsOptions, error) {
-	if _, ok := rawArgs["input"]; !ok {
-		var zeroVal *AlertRecentEventsOptions
-		return zeroVal, nil
-	}
-
-	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
-	if tmp, ok := rawArgs["input"]; ok {
-		return ec.unmarshalOAlertRecentEventsOptions2ᚖgithubᚗcomᚋtargetᚋgoalertᚋgraphql2ᚐAlertRecentEventsOptions(ctx, tmp)
-	}
-
-	var zeroVal *AlertRecentEventsOptions
-	return zeroVal, nil
 }
 
 func (ec *executionContext) field___Directive_args_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
