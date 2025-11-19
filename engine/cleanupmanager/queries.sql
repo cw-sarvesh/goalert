@@ -17,22 +17,40 @@ WHERE id = ANY (
 
 -- name: CleanupMgrFindStaleAlerts :many
 -- CleanupMgrFindStaleAlerts will find alerts that are triggered or active and have no activity in specified number of days.
+-- For acknowledged alerts (active status), it will close them after the threshold regardless of duplicate events.
+-- For unacknowledged alerts (triggered status), it will close them only if there's no activity.
 SELECT
-    id
+    a.id
 FROM
     alerts a
+LEFT JOIN LATERAL (
+    SELECT timestamp
+    FROM alert_logs
+    WHERE alert_id = a.id
+        AND event = 'acknowledged'
+    ORDER BY timestamp DESC
+    LIMIT 1
+) ack_log ON true
 WHERE (a.status = 'triggered'
     OR (sqlc.arg(include_acked)
         AND a.status = 'active'))
-AND created_at <= now() - '1 day'::interval * sqlc.arg(auto_close_threshold_days)
-AND NOT EXISTS (
-    SELECT
-        1
-    FROM
-        alert_logs log
-    WHERE
-        timestamp > now() - '1 day'::interval * sqlc.arg(auto_close_threshold_days)
-        AND log.alert_id = a.id)
+AND (
+    -- For acknowledged alerts: close after threshold regardless of any activity
+    (a.status = 'active' AND ack_log.timestamp IS NOT NULL
+        AND ack_log.timestamp <= now() - '1 day'::interval * sqlc.arg(auto_close_threshold_days))
+    OR
+    -- For unacknowledged alerts: close only if no activity in threshold period
+    (a.status = 'triggered'
+        AND a.created_at <= now() - '1 day'::interval * sqlc.arg(auto_close_threshold_days)
+        AND NOT EXISTS (
+            SELECT
+                1
+            FROM
+                alert_logs log
+            WHERE
+                timestamp > now() - '1 day'::interval * sqlc.arg(auto_close_threshold_days)
+                AND log.alert_id = a.id))
+)
 LIMIT 100;
 
 -- name: CleanupMgrDeleteOldOverrides :execrows
