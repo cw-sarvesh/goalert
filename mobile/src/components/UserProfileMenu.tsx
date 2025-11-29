@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useQuery, gql } from 'urql';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 const USER_QUERY = gql`
   query CurrentUser {
@@ -15,6 +16,7 @@ const USER_QUERY = gql`
 
 export default function UserProfileMenu({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { logout } = useAuth();
+  const { theme, setTheme, colors } = useTheme();
   const [result] = useQuery({ query: USER_QUERY });
   const { data, fetching } = result;
 
@@ -31,36 +33,51 @@ export default function UserProfileMenu({ visible, onClose }: { visible: boolean
   return (
     <View style={styles.modalOverlay}>
       <TouchableOpacity style={styles.overlayBackground} activeOpacity={1} onPress={onClose} />
-      <View style={styles.menuContainer}>
+      <View style={[styles.menuContainer, { backgroundColor: colors.card }]}>
         <View style={styles.header}>
           {fetching ? (
-            <ActivityIndicator size="small" color="#000" />
+            <ActivityIndicator size="small" color={colors.text} />
           ) : (
-            <Text style={styles.greeting}>Hello, {firstName}!</Text>
+            <Text style={[styles.greeting, { color: colors.text }]}>Hello, {firstName}!</Text>
           )}
         </View>
 
         <TouchableOpacity style={styles.menuItem} onPress={() => console.log('Manage Profile')}>
-          <Text style={styles.menuText}>Manage Profile</Text>
+          <Text style={[styles.menuText, { color: colors.text }]}>Manage Profile</Text>
         </TouchableOpacity>
 
-        <View style={styles.divider} />
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-        <Text style={styles.sectionHeader}>Appearance</Text>
+        <Text style={[styles.sectionHeader, { color: colors.subText }]}>Appearance</Text>
         <View style={styles.appearanceRow}>
-          <TouchableOpacity style={styles.appearanceBtn}><Text style={styles.btnText}>Light</Text></TouchableOpacity>
-          <TouchableOpacity style={[styles.appearanceBtn, styles.activeAppearance]}><Text style={styles.activeText}>System</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.appearanceBtn}><Text style={styles.btnText}>Dark</Text></TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.appearanceBtn, { borderColor: colors.border }, theme === 'light' && styles.activeAppearance]}
+            onPress={() => setTheme('light')}
+          >
+            <Text style={[styles.btnText, { color: colors.text }, theme === 'light' && styles.activeText]}>Light</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.appearanceBtn, { borderColor: colors.border }, theme === 'system' && styles.activeAppearance]}
+            onPress={() => setTheme('system')}
+          >
+            <Text style={[styles.btnText, { color: colors.text }, theme === 'system' && styles.activeText]}>System</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.appearanceBtn, { borderColor: colors.border }, theme === 'dark' && styles.activeAppearance]}
+            onPress={() => setTheme('dark')}
+          >
+            <Text style={[styles.btnText, { color: colors.text }, theme === 'dark' && styles.activeText]}>Dark</Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.divider} />
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
         <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
           <Text style={[styles.menuText, styles.logoutText]}>Logout</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-          <Text style={styles.closeButtonText}>Close</Text>
+        <TouchableOpacity style={[styles.closeButton, { backgroundColor: colors.border }]} onPress={onClose}>
+          <Text style={[styles.closeButtonText, { color: colors.text }]}>Close</Text>
         </TouchableOpacity>
       </View>
     </View>

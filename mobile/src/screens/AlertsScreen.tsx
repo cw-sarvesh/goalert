@@ -22,6 +22,8 @@ const ALERTS_QUERY = gql`
 
 type FilterType = 'active' | 'unacknowledged' | 'acknowledged' | 'closed' | 'all';
 
+import { useTheme } from '../context/ThemeContext';
+
 export default function AlertsScreen() {
   const navigation = useNavigation();
   const [search, setSearch] = useState('');
@@ -30,6 +32,8 @@ export default function AlertsScreen() {
   const [showFilter, setShowFilter] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+
+  const { colors } = useTheme();
 
   const getStatusFilter = (s: FilterType) => {
     switch (s) {
@@ -61,10 +65,10 @@ export default function AlertsScreen() {
           <TouchableOpacity onPress={() => setShowSearch(!showSearch)} style={{ marginRight: 15 }}>
             <Text style={{ fontSize: 18 }}>🔍</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowFilter(true)} style={{ marginRight: 15 }}>
+          <TouchableOpacity onPress={() => { setShowFilter(true); setShowProfile(false); }} style={{ marginRight: 15 }}>
             <Text style={{ fontSize: 18 }}>⚙️</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowProfile(true)} style={{ marginRight: 15 }}>
+          <TouchableOpacity onPress={() => { setShowProfile(true); setShowFilter(false); }} style={{ marginRight: 15 }}>
             <Text style={{ fontSize: 24, color: 'white' }}>👤</Text>
           </TouchableOpacity>
         </View>
@@ -78,14 +82,15 @@ export default function AlertsScreen() {
     <View>
       {showSearch && (
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { backgroundColor: colors.border, color: colors.text }]}
           placeholder="Search alerts..."
+          placeholderTextColor={colors.subText}
           value={search}
           onChangeText={setSearch}
         />
       )}
-      <View style={styles.infoBanner}>
-        <Text style={styles.infoText}>
+      <View style={[styles.infoBanner, { backgroundColor: colors.primary + '20' }]}>
+        <Text style={[styles.infoText, { color: colors.primary }]}>
           {favoritesOnly
             ? `Showing ${filter} alerts you are on-call for and from favorites.`
             : `Showing ${filter} alerts for all services.`}
@@ -113,36 +118,36 @@ export default function AlertsScreen() {
   const alerts = data?.alerts?.nodes || [];
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {renderHeader()}
       <FlatList
         data={alerts}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <View style={[styles.item, { borderLeftColor: item.status === 'StatusUnacknowledged' ? 'red' : item.status === 'StatusAcknowledged' ? 'orange' : 'green', borderLeftWidth: 4 }]}>
-            <Text style={styles.title}>#{item.alertID}: {item.status.replace('Status', '')}</Text>
-            <Text style={styles.summary}>{item.summary}</Text>
-            <Text style={styles.service}>{item.service.name}</Text>
+          <View style={[styles.item, { borderBottomColor: colors.border, borderLeftColor: item.status === 'StatusUnacknowledged' ? 'red' : item.status === 'StatusAcknowledged' ? 'orange' : 'green', borderLeftWidth: 4 }]}>
+            <Text style={[styles.title, { color: colors.text }]}>#{item.alertID}: {item.status.replace('Status', '')}</Text>
+            <Text style={[styles.summary, { color: colors.text }]}>{item.summary}</Text>
+            <Text style={[styles.service, { color: colors.subText }]}>{item.service.name}</Text>
           </View>
         )}
-        ListEmptyComponent={<Text style={styles.empty}>No results</Text>}
+        ListEmptyComponent={<Text style={[styles.empty, { color: colors.subText }]}>No results</Text>}
       />
 
       {showFilter && (
         <View style={styles.modalOverlay}>
           <TouchableOpacity style={styles.overlayBackground} activeOpacity={1} onPress={() => setShowFilter(false)} />
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Filter Alerts</Text>
+          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Filter Alerts</Text>
 
             <View style={styles.filterRow}>
-              <Text>Favorites Only</Text>
+              <Text style={{ color: colors.text }}>Favorites Only</Text>
               <Switch value={favoritesOnly} onValueChange={setFavoritesOnly} />
             </View>
 
-            <Text style={styles.sectionTitle}>Status</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Status</Text>
             {['active', 'unacknowledged', 'acknowledged', 'closed', 'all'].map((s) => (
-              <TouchableOpacity key={s} onPress={() => setFilter(s as FilterType)} style={styles.filterOption}>
-                <Text style={{ fontWeight: filter === s ? 'bold' : 'normal', color: filter === s ? 'blue' : 'black' }}>
+              <TouchableOpacity key={s} onPress={() => setFilter(s as FilterType)} style={[styles.filterOption, { borderBottomColor: colors.border }]}>
+                <Text style={{ fontWeight: filter === s ? 'bold' : 'normal', color: filter === s ? colors.primary : colors.text }}>
                   {s.charAt(0).toUpperCase() + s.slice(1)}
                 </Text>
               </TouchableOpacity>
