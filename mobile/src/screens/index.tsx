@@ -1,7 +1,7 @@
 import React from 'react';
 import PlaceholderScreen from './PlaceholderScreen';
 
-export const AlertsScreen = () => <PlaceholderScreen name="Alerts" />;
+export { default as AlertsScreen } from './AlertsScreen';
 export const RotationsScreen = () => <PlaceholderScreen name="Rotations" />;
 export const SchedulesScreen = () => <PlaceholderScreen name="Schedules" />;
 export const EscalationPoliciesScreen = () => <PlaceholderScreen name="Escalation Policies" />;
