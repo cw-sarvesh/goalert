@@ -1,4 +1,4 @@
-package com.goalertmobile
+package com.GoAlert
 
 import android.app.Application
 import com.facebook.react.PackageList
