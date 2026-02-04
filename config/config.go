@@ -39,8 +39,9 @@ type Config struct {
 	}
 
 	Alerts struct {
-		HighPriorityLabelKey   string `public:"true" info:"Label key used to mark high priority alerts."`
-		HighPriorityLabelValue string `public:"true" info:"Label value indicating high priority alerts."`
+		HighPriorityLabelKey   string   `public:"true" info:"Label key used to mark high priority alerts."`
+		HighPriorityLabelValue string   `public:"true" info:"Label value indicating high priority alerts."`
+		NotificationDiscardSummaryContains []string `public:"true" info:"If the alert summary (title) contains any of these phrases, the notification will not be sent. One phrase per line. Example: [no value]"`
 	}
 
 	Maintenance struct {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -122,6 +123,22 @@ func (p *Engine) sendMessage(ctx context.Context, msg *message.Message) (*notifi
 		a, err := p.a.FindOne(ctx, msg.AlertID)
 		if err != nil {
 			return nil, errors.Wrap(err, "lookup alert")
+		}
+		discardPhrases := p.cfg.ConfigSource.Config().Alerts.NotificationDiscardSummaryContains
+		for _, phrase := range discardPhrases {
+			if phrase == "" {
+				continue
+			}
+			if strings.Contains(a.Summary, phrase) {
+				log.Logf(ctx, "sendMessage: alert summary contains %q; discarding notification", phrase)
+				return &notification.SendResult{
+					ID: msg.ID,
+					Status: notification.Status{
+						Details: fmt.Sprintf("alert notification discarded: summary contains %q", phrase),
+						State:   notification.StateFailedPerm,
+					},
+				}, nil
+			}
 		}
 		meta, err := p.a.Metadata(ctx, p.b.db, msg.AlertID)
 		if err != nil {
