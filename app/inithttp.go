@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/target/goalert/app/csp"
 	"github.com/target/goalert/config"
 	"github.com/target/goalert/expflag"
 	"github.com/target/goalert/genericapi"
@@ -381,7 +382,7 @@ func (app *App) initHTTP(ctx context.Context) error {
 			return
 		}
 
-		app.RiverUI.ServeHTTP(w, r)
+		app.RiverUI.ServeHTTP(csp.NonceResponseWriter(csp.NonceValue(r.Context()), w), r)
 	})
 	mux.HandleFunc("POST /admin/riverui/api/", func(w http.ResponseWriter, r *http.Request) {
 		err := permission.LimitCheckAny(r.Context(), permission.Admin)
