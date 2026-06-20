@@ -1,28 +1,28 @@
-# Contributing to GoAlert
+# Contributing to Nightpage
 
 We welcome feature requests, bug reports and contributions for code and documentation.
 
 ## Reporting Issues
 
-Reporting bugs can be done in the GitHub [issue tracker](https://github.com/target/goalert/issues). Please search for existing issues first to help prevent duplicates.
+Reporting bugs can be done in the GitHub issue tracker for this repository. Please search for existing issues first to help prevent duplicates.
 
-Please include the version (`goalert version`) with new bug reports.
+Please include the version (`nightpage version` or `goalert version`) with new bug reports.
 
 ## Code Contribution
 
-GoAlert is already used in production environments, so any new changes/features/functionality must, where possible:
+Nightpage is already used in production environments, so any new changes/features/functionality must, where possible:
 
 - Not alter existing behavior without an explicit config change
 - Co-exist with older versions without disruption
 - Must have a safe way to disable/roll-back
 
-It should always be safe to roll out a new version of GoAlert into an existing environment/deployment without downtime.
+It should always be safe to roll out a new version of Nightpage into an existing environment/deployment without downtime.
 
 As an example, things like DB changes/migrations should preserve behavior across revisions.
 
 ## Pull Requests
 
-Patches are welcome, but we ask that any significant change start as an [issue](https://github.com/target/goalert/issues/new) in the tracker, preferably before work is started.
+Patches are welcome! If you plan to make a significant change, please open an issue in the repository's tracker first to discuss it before starting work.
 
 More information is available for [complex features](./docs/complex-features.md).
 
@@ -42,7 +42,7 @@ Be sure to run `make check` and tests before opening a PR to catch common errors
 
 ## Testing
 
-GoAlert utilizes 3 main types of testing as tools for different purposes:
+Nightpage utilizes 3 main types of testing as tools for different purposes:
 
 - Unit tests are used for complicated logic and exhaustive edge-case testing and benchmarking. They live with the code being tested:
   - For backend code, a `_test.go` version of a file will contain relevant unit tests. More info [here](https://pkg.go.dev/testing)

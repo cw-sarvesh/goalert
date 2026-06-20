@@ -1,13 +1,29 @@
-FROM docker.io/library/alpine:3.14 AS build
+# Use a modern, supported version of Alpine for security and stability
+FROM docker.io/library/alpine:3.20 AS build
 ARG TARGETARCH
 COPY /bin/goalert-linux-$TARGETARCH.tgz /work/goalert.tgz
 RUN mkdir -p /work/bin && tar xfv /work/goalert.tgz -C /work && cp /work/goalert/bin/* /work/bin/
 
-FROM docker.io/library/alpine
+# Use the same modern pinned Alpine version for the runtime stage
+FROM docker.io/library/alpine:3.20
 RUN apk --no-cache add ca-certificates
+
+# Create a secure non-root user/group for container execution
+RUN addgroup -S nightpage && adduser -S -G nightpage nightpage
+
 ENV GOALERT_LISTEN :8081
 EXPOSE 8081
-CMD ["/usr/bin/goalert"]
 
+# Copy the extracted binaries
 COPY --from=build /work/bin/* /usr/bin/
-RUN /usr/bin/goalert self-test
+
+# Create the nightpage brand symlink pointing to the core goalert binary
+RUN ln -s /usr/bin/goalert /usr/bin/nightpage
+
+# Run self-test as root during build to verify binary and setup integrity
+RUN /usr/bin/nightpage self-test
+
+# Switch to the non-root user for security (no root privileges inside container)
+USER nightpage
+
+CMD ["/usr/bin/nightpage"]

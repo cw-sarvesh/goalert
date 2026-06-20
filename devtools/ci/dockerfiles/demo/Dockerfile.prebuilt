@@ -1,11 +1,11 @@
-FROM docker.io/library/alpine:3.14 AS build
+FROM docker.io/library/alpine:3.20 AS build
 ARG TARGETARCH
 COPY /bin/goalert-linux-$TARGETARCH.tgz /work/goalert.tgz
 COPY /bin/linux-$TARGETARCH/resetdb /work/bin/
 COPY devtools/ci/dockerfiles/demo/start.sh /work/bin/
 RUN tar xfv /work/goalert.tgz -C /work && cp /work/goalert/bin/* /work/bin/
 
-FROM docker.io/library/alpine:3.14
+FROM docker.io/library/alpine:3.20
 RUN apk --no-cache add postgresql postgresql-contrib musl-locales ca-certificates
 COPY --from=build /work/bin/* /bin/
 ENV GOALERT_LISTEN :8081

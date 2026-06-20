@@ -1,0 +1,78 @@
+name: GHCR Release Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Docker image tag (e.g. v1.0.0)'
+        required: true
+        default: 'latest'
+  release:
+    types: [published]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # Required for pushing to GHCR
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Node Dependencies
+        run: make node_modules
+
+      - name: Build Release Binaries
+        run: make bin/goalert-linux-amd64.tgz bin/goalert-linux-arm64.tgz BUNDLE=1
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare Container Metadata
+        id: prep
+        run: |
+          # Convert repository name to lowercase to comply with docker registry constraints
+          REPO_LOWER=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "repo=${REPO_LOWER}" >> $GITHUB_OUTPUT
+          
+          # Determine the tag based on the trigger event
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push multi-platform image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: devtools/ci/dockerfiles/goalert/Dockerfile.prebuilt
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ steps.prep.outputs.repo }}:${{ steps.prep.outputs.tag }}
+            ${{ steps.prep.outputs.repo }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
