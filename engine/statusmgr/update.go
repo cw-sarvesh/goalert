@@ -28,14 +28,19 @@ func (db *DB) update(ctx context.Context, tx *sql.Tx, id int64) error {
 		return nil
 	}
 
+	if sub.Status == gadb.EnumAlertStatusClosed {
+		// do not send notifications for closed alerts
+		return q.StatusMgrDeleteSub(ctx, sub.ID)
+	}
+
 	var eventType gadb.EnumAlertLogEvent
 	switch sub.Status {
 	case gadb.EnumAlertStatusTriggered:
 		eventType = gadb.EnumAlertLogEventEscalated
 	case gadb.EnumAlertStatusActive:
 		eventType = gadb.EnumAlertLogEventAcknowledged
-	case gadb.EnumAlertStatusClosed:
-		eventType = gadb.EnumAlertLogEventClosed
+	default:
+		return fmt.Errorf("invalid alert status %s", sub.Status)
 	}
 
 	entry, err := q.StatusMgrLogEntry(ctx, gadb.StatusMgrLogEntryParams{
@@ -99,10 +104,6 @@ func (db *DB) update(ctx context.Context, tx *sql.Tx, id int64) error {
 		}
 	default:
 		return fmt.Errorf("invalid subscription: %v", sub)
-	}
-
-	if sub.Status == gadb.EnumAlertStatusClosed {
-		return q.StatusMgrDeleteSub(ctx, sub.ID)
 	}
 
 	return q.StatusMgrUpdateSub(ctx, gadb.StatusMgrUpdateSubParams{

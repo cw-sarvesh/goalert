@@ -80,10 +80,8 @@ func TestStatusUpdates(t *testing.T) {
 	d1.ExpectSMS("second alert")
 
 	doClose("first alert")
-	d1.ExpectSMS("closed")
 
 	doClose("second alert")
-	d1.ExpectSMS("closed")
 
 	// Ensure status updates are not sent to the user that caused them.
 	h.CreateAlert(h.UUID("sid"), "third alert")
