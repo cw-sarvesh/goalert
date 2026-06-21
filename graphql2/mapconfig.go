@@ -37,6 +37,7 @@ func MapConfigValues(cfg config.Config) []ConfigValue {
 		{ID: "Services.RequiredLabels", Type: ConfigTypeStringList, Description: "List of label names to require new services to define.", Value: strings.Join(cfg.Services.RequiredLabels, "\n")},
 		{ID: "Alerts.HighPriorityLabelKey", Type: ConfigTypeString, Description: "Label key used to mark high priority alerts.", Value: cfg.Alerts.HighPriorityLabelKey},
 		{ID: "Alerts.HighPriorityLabelValue", Type: ConfigTypeString, Description: "Label value indicating high priority alerts.", Value: cfg.Alerts.HighPriorityLabelValue},
+		{ID: "Alerts.NotificationDiscardSummaryContains", Type: ConfigTypeStringList, Description: "If the alert summary (title) contains any of these phrases, the notification will not be sent. One phrase per line. Example: [no value]", Value: strings.Join(cfg.Alerts.NotificationDiscardSummaryContains, "\n")},
 		{ID: "Maintenance.AlertCleanupDays", Type: ConfigTypeInteger, Description: "Closed alerts will be deleted after this many days (0 means disable cleanup).", Value: fmt.Sprintf("%d", cfg.Maintenance.AlertCleanupDays)},
 		{ID: "Maintenance.AlertAutoCloseDays", Type: ConfigTypeInteger, Description: "Unacknowledged alerts will automatically be closed after this many days of inactivity. (0 means disable auto-close).", Value: fmt.Sprintf("%d", cfg.Maintenance.AlertAutoCloseDays)},
 		{ID: "Maintenance.AutoCloseAckedAlerts", Type: ConfigTypeBoolean, Description: "If set, alerts that are acknowledged will also be automatically closed after the configured number of days of inactivity.", Value: fmt.Sprintf("%t", cfg.Maintenance.AutoCloseAckedAlerts)},
@@ -117,6 +118,7 @@ func MapPublicConfigValues(cfg config.Config) []ConfigValue {
 		{ID: "Services.RequiredLabels", Type: ConfigTypeStringList, Description: "List of label names to require new services to define.", Value: strings.Join(cfg.Services.RequiredLabels, "\n")},
 		{ID: "Alerts.HighPriorityLabelKey", Type: ConfigTypeString, Description: "Label key used to mark high priority alerts.", Value: cfg.Alerts.HighPriorityLabelKey},
 		{ID: "Alerts.HighPriorityLabelValue", Type: ConfigTypeString, Description: "Label value indicating high priority alerts.", Value: cfg.Alerts.HighPriorityLabelValue},
+		{ID: "Alerts.NotificationDiscardSummaryContains", Type: ConfigTypeStringList, Description: "If the alert summary (title) contains any of these phrases, the notification will not be sent. One phrase per line. Example: [no value]", Value: strings.Join(cfg.Alerts.NotificationDiscardSummaryContains, "\n")},
 		{ID: "Maintenance.AlertCleanupDays", Type: ConfigTypeInteger, Description: "Closed alerts will be deleted after this many days (0 means disable cleanup).", Value: fmt.Sprintf("%d", cfg.Maintenance.AlertCleanupDays)},
 		{ID: "Maintenance.AlertAutoCloseDays", Type: ConfigTypeInteger, Description: "Unacknowledged alerts will automatically be closed after this many days of inactivity. (0 means disable auto-close).", Value: fmt.Sprintf("%d", cfg.Maintenance.AlertAutoCloseDays)},
 		{ID: "Maintenance.AutoCloseAckedAlerts", Type: ConfigTypeBoolean, Description: "If set, alerts that are acknowledged will also be automatically closed after the configured number of days of inactivity.", Value: fmt.Sprintf("%t", cfg.Maintenance.AutoCloseAckedAlerts)},
@@ -214,6 +216,8 @@ func ApplyConfigValues(cfg config.Config, vals []ConfigValueInput) (config.Confi
 			cfg.Alerts.HighPriorityLabelKey = v.Value
 		case "Alerts.HighPriorityLabelValue":
 			cfg.Alerts.HighPriorityLabelValue = v.Value
+		case "Alerts.NotificationDiscardSummaryContains":
+			cfg.Alerts.NotificationDiscardSummaryContains = parseStringList(v.Value)
 		case "Maintenance.AlertCleanupDays":
 			val, err := parseInt(v.ID, v.Value)
 			if err != nil {
